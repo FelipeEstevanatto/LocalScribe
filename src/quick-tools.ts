@@ -1295,5 +1295,10 @@ export function setupQuickTools(root: HTMLElement, options: QuickOptions) {
       selectTool('background-remover', true);
       await loadFiles([file], undefined, cutout);
     },
+    /** Open a dropped file in a given tool (used by the drop-anywhere menu). */
+    async openFile(file: File, id?: string) {
+      if (id) selectTool(quickTool(id), true);
+      await loadFiles([file]);
+    },
   };
 }

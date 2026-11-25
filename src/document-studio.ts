@@ -1672,5 +1672,16 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
         addPrivacyFiles(files);
       }
     },
+    /** Open any file in the Metadata viewer tab. */
+    async inspect(file: File): Promise<void> {
+      selectTab('metadata');
+      await readMetadata(file);
+    },
+    /** Queue files in the Metadata & privacy batch tab. */
+    clean(files: File[]): void {
+      if (!files.length) return;
+      selectTab('privacy');
+      addPrivacyFiles(files);
+    },
   };
 }

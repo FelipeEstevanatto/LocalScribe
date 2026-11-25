@@ -27,7 +27,14 @@ export interface OpenHandlers {
   vision: (file: File) => void;
   documents: (files: File[]) => void;
   ttsReference: (file: File) => void;
+  converter: (files: File[]) => void;
+  metadata: (file: File) => void;
+  cleanMetadata: (files: File[]) => void;
+  quickTools: (file: File, tool: string) => void;
 }
+
+/** Extensions the File converter accepts as input. Kept here so the menu stays light. */
+const CONVERTIBLE = /\.(mp4|webm|mkv|avi|mov|wmv|flv|gif|3gp|mpe?g|ogv|ts|m4v|mp3|wav|flac|aac|m4a|ogg|opus|aiff?|wma|caf|ac3|amr|weba|png|jpe?g|webp|bmp|tiff?|ico|svg|avif|pdf|docx|txt|html?|md|json|csv|rtf|xml)$/i;
 
 const isImage = (file: File) => file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(file.name);
 const isCaption = (file: File) => /\.(srt|vtt)$/i.test(file.name);
@@ -69,6 +76,22 @@ export function targetsFor(files: File[], open: OpenHandlers): OpenTarget[] {
       { label: 'Vision studio', hint: 'Remove background, depth, objects', run: () => open.vision(images[0]) },
       { label: 'Make a video from it', hint: 'Add audio to a still image', run: open.video },
     );
+  }
+  if (videos.length === 1 && files.length === 1) {
+    targets.push({ label: 'Quick video tools', hint: 'Compress, trim, GIF, rotate, speed', run: () => open.quickTools(videos[0], 'video-compressor') });
+  }
+  const convertible = files.filter((file) => CONVERTIBLE.test(file.name));
+  if (convertible.length) {
+    targets.push({
+      label: convertible.length > 1 ? `Convert all ${convertible.length}` : 'Convert format',
+      hint: 'File converter: audio, video, image, document',
+      run: () => open.converter(convertible),
+    });
+  }
+  if (files.length === 1) {
+    targets.push({ label: 'Inspect metadata', hint: 'Type, checksums, EXIF, streams', run: () => open.metadata(files[0]) });
+  } else if (files.length > 1) {
+    targets.push({ label: 'Strip metadata', hint: 'Clean copies, checksums, ZIP', run: () => open.cleanMetadata(files) });
   }
   return targets;
 }

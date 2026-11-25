@@ -859,7 +859,23 @@ setupOpenMenu({
   ttsReference: (file) => {
     void openTtsReference(file).catch((error) => showToast(describeError(error)));
   },
-}, () => ['home', 'tts', 'models', 'history', 'settings'].includes(currentView));
+  converter: (files) => {
+    navigate('converter');
+    void loadConverterStudio().then((studio) => studio.addFiles(files)).catch((error) => showToast(describeError(error)));
+  },
+  metadata: (file) => {
+    navigate('documents');
+    void loadDocumentStudio().then((studio) => studio.inspect(file)).catch((error) => showToast(describeError(error)));
+  },
+  cleanMetadata: (files) => {
+    navigate('documents');
+    void loadDocumentStudio().then((studio) => studio.clean(files)).catch((error) => showToast(describeError(error)));
+  },
+  quickTools: (file, tool) => {
+    navigate('tools');
+    void loadQuickTools().then((studio) => studio.openFile(file, tool)).catch((error) => showToast(describeError(error)));
+  },
+}, () =>['home', 'tts', 'models', 'history', 'settings'].includes(currentView));
 setupShortcutSheet();
 
 /** Speed and time-left meters for model downloads outside the ASR loader. */
