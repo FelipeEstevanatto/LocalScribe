@@ -3275,6 +3275,9 @@ function updateReverbUi(): void {
   }
 }
 
+const REVERB_MIN_SECONDS = 3;
+const REVERB_MAX_SECONDS = 20;
+
 async function loadReverbClip(file = els.ttsReverbClip.files?.[0]): Promise<boolean> {
   const request = ++reverbBuildToken;
   reverbVoice = null;
@@ -3296,6 +3299,17 @@ async function loadReverbClip(file = els.ttsReverbClip.files?.[0]): Promise<bool
       onFallback: (message) => { els.ttsReverbClipStatus.textContent = `${file.name} · ${message}`; },
     });
     if (request !== reverbBuildToken) return false;
+    // Reverb needs 3-20 s of one speaker. Shorter clips give a poor voice and
+    // longer ones exceed what the reference encoder was built for.
+    if (decoded.duration < REVERB_MIN_SECONDS || decoded.duration > REVERB_MAX_SECONDS) {
+      els.ttsReverbClipStatus.textContent = `${file.name} · ${formatDuration(decoded.duration)} · ` +
+        `the reference clip must be ${REVERB_MIN_SECONDS}-${REVERB_MAX_SECONDS} seconds. ` +
+        (decoded.duration < REVERB_MIN_SECONDS ? 'Choose a longer clip.' : 'Trim it in Audio studio, or choose a shorter clip.');
+      els.ttsStatus.textContent = 'The reference clip length is outside 3-20 seconds.';
+      updateReverbUi();
+      renderVoiceGallery();
+      return false;
+    }
     reverbClip = {
       samples: decoded.samples,
       sampleRate: TARGET_SAMPLE_RATE,
