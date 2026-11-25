@@ -41,7 +41,7 @@ import { setupJobTray, type JobHandle } from './jobs';
 import { renderEngineStorage, setupOpenMenu, setupShortcutSheet, showTipFor } from './app-ux';
 import { sharedFfmpeg } from './audio-ffmpeg';
 import { SAMPLE_TRANSCRIPT, wordErrorRate } from './benchmark';
-import { openWaveSource, summarizeWave, type WaveSource } from './wave-source';
+import { openWaveSource, planWaveChunks, summarizeWave, type WaveSource } from './wave-source';
 import type { WordTiming } from './transformers-asr';
 import { buildExport, EXPORT_FORMATS, realignSegments, type ExportFormat } from './exports';
 import { modelFit, prefersCompactModel, readDeviceProfile, type DeviceProfile } from './capabilities';
@@ -4844,11 +4844,11 @@ async function clearAllCache(): Promise<void> {
 /* Transcription                                                              */
 /* -------------------------------------------------------------------------- */
 
-function planAudioChunks(audio: DecodedAudio | WaveSource): Array<{
+async function planAudioChunks(audio: DecodedAudio | WaveSource): Promise<Array<{
   startSample: number;
   endSample: number;
   samples?: Float32Array;
-}> {
+}>> {
   const seconds = currentModel().chunkSeconds ?? 30;
   if (audio.samples) {
     return splitAtSilence(audio.samples, TARGET_SAMPLE_RATE, seconds).map((chunk) => ({
@@ -4856,11 +4856,7 @@ function planAudioChunks(audio: DecodedAudio | WaveSource): Array<{
       endSample: chunk.startSample + chunk.samples.length,
     }));
   }
-  const size = Math.round(seconds * TARGET_SAMPLE_RATE);
-  return Array.from({ length: Math.ceil(audio.sampleCount / size) }, (_, index) => ({
-    startSample: index * size,
-    endSample: Math.min((index + 1) * size, audio.sampleCount),
-  }));
+  return planWaveChunks(audio, seconds);
 }
 
 async function transcribe(): Promise<'done' | 'empty' | 'cancelled' | 'failed' | undefined> {
@@ -4895,7 +4891,7 @@ async function transcribe(): Promise<'done' | 'empty' | 'cancelled' | 'failed' |
     const loadMs = performance.now() - loadStart;
     modelReady = true;
     const runStart = performance.now();
-    const chunks = planAudioChunks(audio);
+    const chunks = await planAudioChunks(audio);
 
     if (!chunks.length) {
       throw new AppError('That file did not contain any audio to transcribe.', {
@@ -5088,7 +5084,7 @@ async function transcribeLyrics(
     const decoded = await decodeAudioFile(file, { signal });
     onProgress(0.02, `Loading ${currentModel().name}`);
     const engine = await ensureEngine(signal);
-    const chunks = planAudioChunks(decoded);
+    const chunks = await planAudioChunks(decoded);
     const lines: { start: number; end: number; text: string; words?: { text: string; start: number; end: number | null }[] }[] = [];
     for (const [index, chunk] of chunks.entries()) {
       signal.throwIfAborted();

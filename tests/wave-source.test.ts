@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { analyzeAudio, TARGET_SAMPLE_RATE } from '../src/audio';
-import { openWaveSource, summarizeWave } from '../src/wave-source';
+import { openWaveSource, planWaveChunks, summarizeWave } from '../src/wave-source';
 
 // Include an odd-sized metadata chunk so this exercises RIFF padding too.
 function makeWave(samples: Int16Array, rate = TARGET_SAMPLE_RATE): Blob {
@@ -60,4 +60,21 @@ describe('bounded PCM WAV input', () => {
     await expect(summarizeWave(source, controller.signal)).rejects.toHaveProperty('name', 'AbortError');
     expect(reads).toBe(1);
   });
+});
+
+
+test('planWaveChunks cuts long WAV audio at the quiet gap near the target', async () => {
+  const rate = 1000;
+  const total = 75 * rate;
+  const samples = new Float32Array(total).fill(0.5);
+  // Quiet gaps at 28.5 s and 57 s.
+  samples.fill(0, 28.4 * rate, 28.6 * rate);
+  samples.fill(0, 56.9 * rate, 57.1 * rate);
+  const source = { sampleCount: total, read: async (a: number, b: number) => samples.slice(a, b) };
+  const chunks = await planWaveChunks(source, 30, 2.5, rate);
+  expect(chunks.length).toBe(3);
+  expect(Math.abs(chunks[0].endSample - 28.5 * rate)).toBeLessThan(100);
+  expect(Math.abs(chunks[1].endSample - 57 * rate)).toBeLessThan(100);
+  expect(chunks[2].endSample).toBe(total);
+  expect(chunks[1].startSample).toBe(chunks[0].endSample);
 });

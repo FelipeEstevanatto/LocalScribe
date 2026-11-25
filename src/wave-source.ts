@@ -79,3 +79,52 @@ export async function summarizeWave(source: WaveSource, signal: AbortSignal): Pr
   if (signal.aborted) throw abortError();
   return { peaks, analysis: analyzer.finish() };
 }
+
+/**
+ * Plan transcription chunks for a block-read WAV, cutting each boundary at the
+ * quietest 100 ms inside a short window around the target length. This matches
+ * what `splitAtSilence` does for fully decoded audio, so long WAV imports are
+ * not cut mid-word at fixed 30 s marks. Only the search windows are read.
+ */
+export async function planWaveChunks(
+  source: Pick<WaveSource, 'sampleCount' | 'read'>,
+  targetSeconds = 30,
+  searchSeconds = 2.5,
+  sampleRate = TARGET_SAMPLE_RATE,
+): Promise<Array<{ startSample: number; endSample: number }>> {
+  const total = source.sampleCount;
+  if (total <= 0) return [];
+  const target = Math.round(Math.max(5, targetSeconds) * sampleRate);
+  const search = Math.round(Math.max(0.5, searchSeconds) * sampleRate);
+  const minChunk = Math.min(10 * sampleRate, target);
+  const windowSize = Math.max(1, Math.round(0.1 * sampleRate));
+  const step = Math.max(1, Math.round(0.01 * sampleRate));
+  const chunks: Array<{ startSample: number; endSample: number }> = [];
+  let start = 0;
+
+  while (total - start > target + search) {
+    const from = Math.max(start + minChunk, start + target - search);
+    const to = Math.min(total, start + target + search);
+    const samples = await source.read(from, to);
+    // Prefix sums of energy make every window O(1).
+    const energy = new Float64Array(samples.length + 1);
+    for (let i = 0; i < samples.length; i += 1) {
+      const value = Number.isFinite(samples[i]) ? samples[i] : 0;
+      energy[i + 1] = energy[i] + value * value;
+    }
+    let best = Math.floor(samples.length / 2);
+    let bestEnergy = Infinity;
+    for (let offset = 0; offset + windowSize <= samples.length; offset += step) {
+      const value = energy[offset + windowSize] - energy[offset];
+      if (value < bestEnergy) {
+        bestEnergy = value;
+        best = offset + Math.floor(windowSize / 2);
+      }
+    }
+    const cut = Math.min(total, Math.max(start + minChunk, from + best));
+    chunks.push({ startSample: start, endSample: cut });
+    start = cut;
+  }
+  chunks.push({ startSample: start, endSample: total });
+  return chunks;
+}
