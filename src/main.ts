@@ -2412,6 +2412,16 @@ function cancelRecording(): void {
   setStatus('Recording cancelled.');
 }
 
+/**
+ * Whether the selected speech model will actually run on the CPU. Granite
+ * Speech requires WebGPU and ignores the CPU preference, so labels must not
+ * claim WASM for it.
+ */
+function modelRunsOnCpu(model = currentModel()): boolean {
+  if (model.pipeline === 'granite-speech') return false;
+  return state.forceCpu || !state.webgpu.supported;
+}
+
 function renderQueueSettings(): void {
   const model = currentModel();
   const variant = currentVariant();
@@ -2419,7 +2429,7 @@ function renderQueueSettings(): void {
   const variantLabel = rawLabel.startsWith(model.name)
     ? rawLabel.slice(model.name.length).replace(/^[\s·-]+/, '')
     : rawLabel;
-  const parts = [variantLabel || variant.id, state.forceCpu ? 'WASM' : 'WebGPU'];
+  const parts = [variantLabel || variant.id, modelRunsOnCpu(model) ? 'WASM' : model.pipeline === 'granite-speech' ? 'WebGPU (required)' : 'WebGPU'];
   if (model.languageOptions?.length) {
     const language = els.languageSelect.selectedOptions[0]?.textContent?.trim();
     parts.push(language || 'Auto-detect');
@@ -3009,16 +3019,15 @@ function renderSession(): void {
   }
 
   const webgpuAvailable = state.webgpu.supported;
+  const webgpuOnly = currentModel().pipeline === 'granite-speech';
+  const onCpu = modelRunsOnCpu();
   els.deviceWebgpu.disabled = state.busy !== 'idle' || !webgpuAvailable;
-  els.deviceCpu.disabled = state.busy !== 'idle';
-  els.deviceWebgpu.setAttribute(
-    'aria-pressed',
-    String(webgpuAvailable && !state.forceCpu),
-  );
-  els.deviceCpu.setAttribute(
-    'aria-pressed',
-    String(!webgpuAvailable || state.forceCpu),
-  );
+  // A WebGPU-only model cannot run on the CPU, so the toggle shows WebGPU
+  // as the active device and explains why CPU is unavailable.
+  els.deviceCpu.disabled = state.busy !== 'idle' || webgpuOnly;
+  els.deviceCpu.title = webgpuOnly ? 'This model requires WebGPU and cannot run on the CPU.' : '';
+  els.deviceWebgpu.setAttribute('aria-pressed', String(webgpuAvailable && !onCpu));
+  els.deviceCpu.setAttribute('aria-pressed', String(onCpu));
 
   if (state.busy === 'loading') {
     renderSessionStatus('Loading model…', 'busy');
