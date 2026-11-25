@@ -14555,15 +14555,23 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
   async function loadCaptionFile(file: File): Promise<void> {
     if (captionTrackState.locked) return;
     let parsed: Cue[] = [];
+    // The captions panel is often collapsed, so import problems also go to
+    // the editor status line where the user is looking.
+    const reportCaptionError = (message: string): void => {
+      captionStatus.textContent = message;
+      status.textContent = message;
+      status.classList.add('text-rose-300');
+      window.setTimeout(() => status.classList.remove('text-rose-300'), 6000);
+    };
     try {
       parsed = parseCaptions(await file.text());
     } catch (error) {
-      captionStatus.textContent = errorMessage(error);
+      reportCaptionError(`Could not import ${file.name}: ${errorMessage(error)} The current captions were kept.`);
       return;
     }
     if (captionTrackState.locked) return;
     if (!parsed.length) {
-      captionStatus.textContent = `${file.name} has no readable cues.`;
+      reportCaptionError(`${file.name} has no readable cues. Check that it is a valid SRT or WebVTT file. The current captions were kept.`);
       return;
     }
     fileCues = parsed;
@@ -14571,6 +14579,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
     captionSource.value = 'file';
     updateCaptions();
     commit();
+    status.textContent = `${parsed.length} caption cue${parsed.length === 1 ? '' : 's'} imported from ${file.name}.`;
   }
 
   function updateCaptions(): void {
