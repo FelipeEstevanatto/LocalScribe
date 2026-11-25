@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildExport, realignSegments } from '../src/exports';
+import { buildExport, csvCell, realignSegments } from '../src/exports';
 
 const segments = [
   { start: 0, end: 2, text: 'hello there world' },
@@ -32,5 +32,21 @@ describe('realignSegments', () => {
     }).body;
     expect(srt).toContain('second chapter here');
     expect(srt).not.toContain('second part here');
+  });
+});
+
+describe('export escaping', () => {
+  const base = { duration: 2, fileName: 'a.wav', modelName: 'm', createdAt: new Date(0) };
+  test('VTT cue text cannot contain an arrow or raw tags', () => {
+    const body = buildExport('vtt', { ...base, text: 'x', segments: [{ start: 0, end: 1, text: 'a --> b <i>c</i> & d' }] }).body;
+    const cue = body.split('\n')[3];
+    expect(cue).not.toContain('-->');
+    expect(cue).toContain('&lt;i&gt;');
+    expect(cue).toContain('&amp;');
+  });
+  test('CSV neutralises formula-like cells, including the speaker', () => {
+    expect(csvCell('=SUM(A1)')).toBe(`"'=SUM(A1)"`);
+    expect(csvCell('  @cmd')).toBe(`"'  @cmd"`);
+    expect(csvCell('plain, text')).toBe('"plain, text"');
   });
 });

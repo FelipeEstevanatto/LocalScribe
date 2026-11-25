@@ -197,7 +197,8 @@ function plainText(input: ExportInput): string {
 function srt(input: ExportInput): string {
   return `${timedSegments(input)
     .map((segment, index) => {
-      return `${index + 1}\n${clock(segment.start, ',')} --> ${clock(segment.end, ',')}\n${labelled(segment)}\n`;
+      // A "-->" inside the text would be parsed as a timing line.
+      return `${index + 1}\n${clock(segment.start, ',')} --> ${clock(segment.end, ',')}\n${labelled(segment).replace(/-->/g, '->')}\n`;
     })
     .join('\n')}`;
 }
@@ -205,7 +206,10 @@ function srt(input: ExportInput): string {
 function vtt(input: ExportInput): string {
   const cues = timedSegments(input)
     .map((segment) => {
-      const body = segment.text.replace(/\r?\n/g, ' ').trim();
+      // Cue text must not contain "-->" and must escape & and <, or players
+      // read it as a timing line or a tag.
+      const body = segment.text.replace(/\r?\n/g, ' ').trim()
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       // WebVTT voice spans name the speaker so players can style or show it.
       const voiced = segment.speaker ? `<v ${segment.speaker.replace(/[<>&]/g, '')}>${body}` : body;
       return `${clock(segment.start, '.')} --> ${clock(segment.end, '.')}\n${voiced}`;
@@ -256,17 +260,25 @@ function json(input: ExportInput): string {
   )}\n`;
 }
 
+/**
+ * Quote a CSV cell. Text a spreadsheet would run as a formula (a leading =,
+ * +, -, @, tab or carriage return, also after leading spaces) gets a leading
+ * apostrophe so it opens as data.
+ */
+export function csvCell(value: string): string {
+  const safe = /^[ ]*[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
 function csv(input: ExportInput): string {
   // The speaker column only appears once diarization has run.
   const speakers = hasSpeakers(input);
   const rows = timedSegments(input).map((segment) => {
     // Quoting preserves commas and line breaks. Prefix formula-like text so
     // spreadsheets open imported transcripts as data.
-    const text = /^[=+\-@]/.test(segment.text) ? `'${segment.text}` : segment.text;
-    const quoted = `"${text.replace(/"/g, '""')}"`;
+    const quoted = csvCell(segment.text);
     if (!speakers) return `${segment.start.toFixed(3)},${segment.end.toFixed(3)},${quoted}`;
-    const speaker = (segment.speaker ?? '').replace(/"/g, '""');
-    return `${segment.start.toFixed(3)},${segment.end.toFixed(3)},"${speaker}",${quoted}`;
+    return `${segment.start.toFixed(3)},${segment.end.toFixed(3)},${csvCell(segment.speaker ?? '')},${quoted}`;
   });
   const header = speakers ? 'start_seconds,end_seconds,speaker,text' : 'start_seconds,end_seconds,text';
   return [header, ...rows, ''].join('\r\n');
