@@ -24,6 +24,34 @@ const SPOKEN_PUNCTUATION: Array<[RegExp, string]> = [
   [/\s*\bclose (?:parenthesis|bracket)\b\s*/gi, ') '],
 ];
 
+/**
+ * Words that, right before "period", "comma", "colon" and friends, show the
+ * word is being used as a noun ("the trial period", "use a comma"), not
+ * dictated as punctuation.
+ */
+const NOUN_CONTEXT = new Set([
+  'a', 'an', 'the', 'this', 'that', 'these', 'those', 'each', 'every', 'any', 'no', 'one', 'per', 'same',
+  'my', 'your', 'his', 'her', 'its', 'our', 'their', 'trial', 'grace', 'time', 'waiting', 'notice',
+  'billing', 'reporting', 'school', 'class', 'free', 'study', 'cooling', 'transition', 'rest', 'oxford',
+  'serial', 'double', 'single', 'missing', 'extra', 'final', 'first', 'second', 'last',
+]);
+
+/**
+ * Decide whether a spoken-punctuation match is a dictation command. It is not
+ * when a determiner or noun-modifier comes right before it, when the model
+ * already punctuated right after it ("Period."), or when "of" follows
+ * ("a period of time").
+ */
+function isSpokenCommand(whole: string, offset: number, length: number): boolean {
+  const before = whole.slice(0, offset).trimEnd();
+  const previous = before.match(/([A-Za-z']+)$/)?.[1]?.toLowerCase();
+  if (previous && NOUN_CONTEXT.has(previous)) return false;
+  const after = whole.slice(offset + length);
+  if (/^[.,;:!?]/.test(after)) return false;
+  if (/^\s*of\b/i.test(after)) return false;
+  return true;
+}
+
 const UNITS: Record<string, number> = {
   zero: 0,
   one: 1,
@@ -139,12 +167,14 @@ function replaceNumbers(text: string): string {
 
       const after = whole.slice(offset + match.length);
       const hasPercent = Boolean(percentPart);
-      const bareOne = run.trim().toLowerCase() === 'one';
+      const singleWord = !/[\s-]/.test(run.trim());
+      const smallSingle = singleWord && Number(parsed.value) < 10;
       const nextIsUnit = hasPercent || UNITS_AFTER_NUMBER.test(after);
 
-      // "One of them" must stay a pronoun. A single "one" only becomes a digit
-      // when a unit follows it.
-      if (bareOne && !nextIsUnit) return match;
+      // "One of them" must stay a pronoun, and "two children and one dog"
+      // should not become "2 children and one dog". A lone number word under
+      // ten stays a word unless a unit follows it ("five minutes" -> "5 minutes").
+      if (smallSingle && !nextIsUnit) return match;
 
       if (hasPercent) {
         return `${parsed.value}%`;
@@ -180,7 +210,9 @@ export function polishTranscript(text: string, options: PolishOptions): string {
 
   if (options.punctuation) {
     for (const [pattern, replacement] of SPOKEN_PUNCTUATION) {
-      output = output.replace(pattern, replacement);
+      output = output.replace(pattern, (match: string, offset: number, whole: string) =>
+        isSpokenCommand(whole, offset, match.length) ? replacement : match,
+      );
     }
     output = output.replace(/\.\s*\./g, '.').replace(/\?\s*\?/g, '?');
   }
