@@ -37,6 +37,7 @@ import type { setupQuickTools } from './quick-tools';
 import { TransferMeter, WorkMeter } from './transfer';
 import type { SpeakerLine } from './diarization';
 import { PhononPlugin, SupertonicPlugin, type TtsPlugin } from './tts-plugins';
+import { isEnglishOnlyEngine, prepareSpeechText } from './tts-text';
 import { setupJobTray, type JobHandle } from './jobs';
 import { renderEngineStorage, setupOpenMenu, setupShortcutSheet, showTipFor } from './app-ux';
 import { sharedFfmpeg } from './audio-ffmpeg';
@@ -6591,9 +6592,15 @@ function warmTinyVoca(): void {
 async function generateSpeech(): Promise<void> {
   if (ttsBusy) return;
 
-  const text = els.ttsText.value.trim();
+  const prepared = prepareSpeechText(els.ttsText.value);
+  const text = prepared.text;
   if (!text) {
     els.ttsStatus.textContent = 'Type some English text first.';
+    els.ttsText.focus();
+    return;
+  }
+  if (isEnglishOnlyEngine(ttsModelId) && prepared.nonLatinShare > 0.3) {
+    els.ttsStatus.textContent = 'This voice only speaks English, and most of this text is in another script. Choose Supertonic 3 or Reverb-TTS for other languages.';
     els.ttsText.focus();
     return;
   }
