@@ -1497,6 +1497,13 @@ function bindEvents(): void {
   window.addEventListener('hashchange', () => {
     const legacyQueue = location.hash.startsWith('#/queue');
     const view = viewFromHash();
+    // An unknown route goes Home and fixes the URL, matching a fresh load,
+    // instead of leaving the previous tool under a bad address. In-page
+    // anchors (#section) are not routes and are left alone.
+    if (!view && location.hash.startsWith('#/')) {
+      navigate('home');
+      return;
+    }
     if (view && view !== currentView) navigate(view, { updateHash: false });
     else if (view === 'tools') void loadQuickTools().then(studio => studio.show()).catch(error => showToast(describeError(error)));
     if (legacyQueue) {
