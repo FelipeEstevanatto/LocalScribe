@@ -4342,6 +4342,16 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
     return entry;
   }
 
+  /**
+   * Proxies are 540p or 720p copies. They only help when the source is larger
+   * than that (or its size is unknown); offering one for a 640x360 clip would
+   * build a copy that is no smaller.
+   */
+  function proxyWorthwhile(asset: MediaAsset): boolean {
+    const shortEdge = Math.min(asset.probe.width || 0, asset.probe.height || 0);
+    return !shortEdge || shortEdge > 720;
+  }
+
   function updateMediaCard(entry: MediaCardEntry, asset: MediaAsset): void {
     entry.asset = asset;
     entry.card.dataset.assetId = String(asset.id);
@@ -4359,6 +4369,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
         : 'Build a small, fast copy for the timeline; export still uses the original';
       if (entry.proxy.title !== proxyTitle) entry.proxy.title = proxyTitle;
       entry.proxy.classList.toggle('active', Boolean(asset.proxy));
+      entry.proxy.classList.toggle('hidden', !asset.proxy && !proxyWorthwhile(asset));
     }
     const thumbKey = thumbKeyFor(asset);
     if (entry.thumbKey === thumbKey) return;
@@ -4697,7 +4708,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
         () => { status.textContent = 'Could not copy the file name.'; },
       );
     });
-    if (asset.kind === 'video') {
+    if (asset.kind === 'video' && (asset.proxy || proxyWorthwhile(asset))) {
       item(asset.proxy ? 'Remove preview proxy' : 'Create preview proxy', () => {
         if (asset.proxy) clearProxy(asset);
         else void buildProxy(asset);
@@ -11647,7 +11658,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
       }));
     }
     const sourceAsset = assets.find((asset) => asset.key === mediaKey(clip.file));
-    if (sourceAsset && sourceAsset.kind === 'video') {
+    if (sourceAsset && sourceAsset.kind === 'video' && (sourceAsset.proxy || proxyWorthwhile(sourceAsset))) {
       actions.append(button(sourceAsset.proxy ? 'Remove preview proxy' : 'Create preview proxy', () => {
         if (sourceAsset.proxy) clearProxy(sourceAsset);
         else void buildProxy(sourceAsset);
