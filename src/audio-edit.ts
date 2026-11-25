@@ -66,7 +66,7 @@ export function joinGraph(clips: readonly JoinClip[], crossfade = 0): { graph: s
   const time = (value: number) => value.toFixed(6);
   const parts = clips.map(({ duration, trimStart = 0, trimEnd = 0 }, i) => {
     const trim = trimStart > 0 || trimEnd > 0 ? `atrim=start=${time(trimStart)}:end=${time(duration - trimEnd)},` : '';
-    return `[${i}:a:0]${trim}asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[a${i}]`;
+    return `[${i}:a:0]${trim}asetpts=PTS-STARTPTS,aresample=48000:ochl=stereo:rematrix_maxval=1,aformat=sample_fmts=fltp:channel_layouts=stereo[a${i}]`;
   });
   let tail = '';
   if (fade > 0.01) {
@@ -94,9 +94,9 @@ export function mixKaraoke(ffmpeg: AudioFfmpeg, backing: Blob, voice: Blob, sett
 }, job: JobOptions, duration?: number): Promise<Blob> {
   const { offset, backingGain, voiceGain, voicePitch } = settings;
   const voiceOffset = offset >= 0 ? `adelay=${Math.round(offset * 1000)}:all=1` : `atrim=start=${-offset},asetpts=PTS-STARTPTS`;
-  const voiceFilters = ['aresample=48000:ochl=stereo', ...pitchTempoFilters(48000, voicePitch, 1), voiceOffset, `volume=${voiceGain}dB`];
+  const voiceFilters = ['aresample=48000:ochl=stereo:rematrix_maxval=1', ...pitchTempoFilters(48000, voicePitch, 1), voiceOffset, `volume=${voiceGain}dB`];
   const graph = [
-    `[0:a:0]aresample=48000:ochl=stereo,volume=${backingGain}dB[backing]`,
+    `[0:a:0]aresample=48000:ochl=stereo:rematrix_maxval=1,volume=${backingGain}dB[backing]`,
     `[1:a:0]${voiceFilters.join(',')}[voice]`,
     `[backing][voice]${mixFilter(2)}[out]`,
   ].join(';');

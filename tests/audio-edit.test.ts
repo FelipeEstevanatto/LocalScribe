@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { audioEditArgs, inspectEditorAudio, type AudioEdit } from '../src/audio-edit';
+import { audioEditArgs, inspectEditorAudio, joinGraph, type AudioEdit } from '../src/audio-edit';
 
 function stereoWave(): Blob {
   const bytes = new ArrayBuffer(44 + 2 * 8);
@@ -43,4 +43,12 @@ test('middle removal joins both retained ranges and preserves layout after loudn
   expect(graph).toContain('afade=t=out:st=3.000000000');
   expect(graph).toContain('alimiter=limit=');
   expect(() => audioEditArgs({ ...edit, start: 0, end: 5 }, audio)).toThrow('entire recording');
+});
+
+test('joinGraph downmixes with a normalised matrix so 5.1 input cannot clip', () => {
+  const { graph } = joinGraph([
+    { blob: new Blob(), duration: 2 },
+    { blob: new Blob(), duration: 2 },
+  ]);
+  expect(graph.match(/rematrix_maxval=1/g)?.length).toBe(2);
 });

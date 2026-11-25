@@ -498,7 +498,9 @@ export function canSkipSoundtrackMix(
     !clip.mute && (clip.volume ?? 1) === 1 && (clip.audioTrack ?? 0) === 0);
 }
 
-const STEREO = 'aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo';
+// rematrix_maxval=1 keeps a 5.1 to stereo downmix from clipping (FFmpeg's default
+// matrix is not normalised and float WAV output does not clamp).
+const STEREO = 'aresample=48000:ochl=stereo:rematrix_maxval=1,aformat=sample_fmts=fltp:channel_layouts=stereo';
 
 /** Merge caption spans so a long transcript stays a manageable filter graph. */
 function duckSpans(cues: readonly { start: number; end: number }[], total: number): { start: number; end: number }[] {
