@@ -1122,7 +1122,9 @@ export function setupAudioStudio(root: HTMLElement, options: StudioOptions) {
     }
     const length = selection.end - selection.start;
     const result = cutMode === 'keep' ? length : version.audio.duration - length;
-    cutSummary.textContent = `Result: ${formatClock(result, true)}${fades.length ? ' with ' + fades.join(' and ') : ''}.`;
+    cutSummary.textContent = result < 0.05
+      ? 'Nothing would be left. Adjust the selection or switch between Keep and Delete.'
+      : `Result: ${formatClock(result, true)}${fades.length ? ' with ' + fades.join(' and ') : ''}.`;
   }
 
   function fieldSelection(): void {
@@ -1171,6 +1173,16 @@ export function setupAudioStudio(root: HTMLElement, options: StudioOptions) {
     const version = current();
     if (!version) return;
     const selection = wave.getSelection();
+    // Deleting (nearly) everything would leave no audio. Say so instead of
+    // failing with "This file contains no playable audio."
+    if (selection && cutMode === 'remove' && version.audio.duration - (selection.end - selection.start) < 0.05) {
+      cutSummary.textContent = 'This would delete the whole track. Leave some audio unselected, or use Revert to original.';
+      return;
+    }
+    if (selection && cutMode === 'keep' && selection.end - selection.start < 0.05) {
+      cutSummary.textContent = 'The selection is too short to keep. Drag across the waveform to select a longer part.';
+      return;
+    }
     const edit: AudioEdit = {
       ...emptyEdit(version.audio.duration),
       cut: selection ? cutMode : 'none',
