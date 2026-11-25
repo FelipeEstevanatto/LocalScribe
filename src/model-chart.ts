@@ -243,8 +243,8 @@ export function renderModelChart(
     : 'All plotted values use the leaderboard’s evaluation set.';
   const notPlotted =
     dataset.id === 'asr'
-      ? 'Whisper Tiny / Base / Small, Omnilingual ASR 300M and Whistle — no directly comparable leaderboard row.'
-      : 'Reverb and Kitten TTS 2 — no directly comparable leaderboard row.';
+      ? 'Whisper Tiny / Base / Small, Omnilingual ASR 300M and Whistle. No directly comparable leaderboard row.'
+      : 'Reverb and Kitten TTS 2. No directly comparable leaderboard row.';
   pinnedPointId = null;
 
   container.innerHTML = `

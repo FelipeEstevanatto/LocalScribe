@@ -54,8 +54,8 @@ function render(): void {
           <td>${row.op}</td>
           <td>${row.file}</td>
           <td class="num">${row.ms.toFixed(1)}</td>
-          <td class="num">${row.bytes ? (row.bytes / 1e6).toFixed(2) : '—'}</td>
-          <td class="num">${row.heapMB === undefined ? '—' : row.heapMB.toFixed(1)}</td>
+          <td class="num">${row.bytes ? (row.bytes / 1e6).toFixed(2) : '-'}</td>
+          <td class="num">${row.heapMB === undefined ? '-' : row.heapMB.toFixed(1)}</td>
           <td>${row.ffmpegLoaded ? 'yes' : 'no'}</td>
           <td class="${row.ok ? 'ok' : 'err'}">${row.ok ? row.note ?? 'ok' : row.error}</td>
         </tr>

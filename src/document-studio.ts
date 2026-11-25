@@ -71,7 +71,7 @@ function formatSize(bytes: number): string {
 }
 
 function printable(value: unknown): string {
-  if (value === null || value === undefined) return '—';
+  if (value === null || value === undefined) return '-';
   if (value instanceof Date) return value.toISOString();
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
@@ -225,7 +225,7 @@ function buildPdfTags(file: File, pdf: PdfMetadataResult): MetadataTag[] {
   const add = (tag: string, value: unknown): void => {
     if (value === null || value === undefined || value === '') return;
     const text = printable(value);
-    if (text === '—') return;
+    if (text === '-') return;
     tags.push({ tag, path: `ExifTool.${tag}`, value: text });
   };
 

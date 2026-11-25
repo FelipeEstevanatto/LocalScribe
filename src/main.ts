@@ -400,7 +400,7 @@ const VIEW_META: Record<
     eyebrow: 'Vision & image',
     title: 'Vision studio',
     description:
-      'Background removal, depth, object detection, segmentation, classification, and captions — all in this tab.',
+      'Background removal, depth, object detection, segmentation, classification, and captions, all in this tab.',
   },
   tools: { eyebrow: 'Video & image', title: 'Quick tools', description: '' },
   converter: {
@@ -1068,7 +1068,7 @@ function resetReceipt(): void {
   receiptStartedAt = 0;
   els.receiptResult.classList.add('hidden');
   els.receiptStatus.textContent =
-    'No audit yet. The service worker records destinations, methods, and response sizes — never audio or text.';
+    'No audit yet. The service worker records destinations, methods, and response sizes, never audio or text.';
 }
 
 /** One source of truth for what every file picker accepts. */
@@ -1300,7 +1300,7 @@ function paintSidebarActivity(view: AppView): void {
   dot.setAttribute('aria-label', activity.label);
   link.classList.add('has-activity');
   link.dataset.activityTone = activity.tone;
-  link.title = `${base} — ${activity.label}`;
+  link.title = `${base}: ${activity.label}`;
   link.setAttribute('aria-label', `${base}, ${activity.label}`);
 }
 
@@ -3075,7 +3075,7 @@ function renderSession(): void {
     model.pipeline === 'granite-speech' && !state.webgpu.supported
       ? 'This model requires WebGPU and will not run in this browser.'
       : cached
-        ? 'Model is cached — this run loads from disk.'
+        ? 'Model is cached. This run loads from disk.'
         : `First run downloads about ${formatBytes(variant.approxBytes)} from Hugging Face.`;
 
 }
@@ -3510,7 +3510,7 @@ function updateTtsDownloadHint(): void {
   }
 
   els.ttsDownloadHint.textContent =
-    'The 21 MB tiny-voca model is bundled with the site — no model download.';
+    'The 21 MB tiny-voca model is bundled with the site, so there is no model download.';
 }
 
 /* -------------------------------------------------------------------------- */

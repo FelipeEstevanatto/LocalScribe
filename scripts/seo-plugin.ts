@@ -18,7 +18,7 @@ const SITE_URL = (process.env.SITE_URL || 'https://localscribe.app').replace(/\/
 const SITE_NAME = 'LocalScribe';
 const VIDEO_EDITOR_SLUG = 'video-editor';
 const OG_IMAGE = `${SITE_URL}/og.jpg`;
-const OG_ALT = 'LocalScribe — private speech, video, and vision tools running in your browser';
+const OG_ALT = 'LocalScribe: private speech, video, and vision tools running in your browser';
 const OG_LOCALES: Record<string, string> = {
   en: 'en_US',
   pt: 'pt_BR',
@@ -381,7 +381,7 @@ const HUBS: HubDefinition[] = [
     title: 'Local speech use cases',
     metaTitle: 'Speech-to-text use cases in the browser | LocalScribe',
     metaDescription:
-      'Dictation, meetings, subtitles, podcasts, interviews, lectures, voice notes, calls, and private transcription — local browser workflows and model picks.',
+      'Dictation, meetings, subtitles, podcasts, interviews, lectures, voice notes, calls, and private transcription: local browser workflows and model picks.',
     intro:
       'Each guide maps a recording job to the model, export, and limits that matter. Everything runs in the tab: there is no backend, no account, and no upload for the audio.',
     links: USE_CASES,
@@ -513,7 +513,7 @@ async function writeFileIfChanged(filePath: string, content: string): Promise<vo
 }
 
 function appSeoMeta(): string {
-  const title = 'LocalScribe — local speech, voice, and vision tools';
+  const title = 'LocalScribe: local speech, voice, and vision tools';
   const description = 'Transcribe, dictate, clone a voice, and process images locally. No uploads, no accounts, no backend.';
   const jsonLd = [
     {

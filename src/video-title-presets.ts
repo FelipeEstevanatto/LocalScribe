@@ -38,7 +38,7 @@ export const TITLE_PRESETS: readonly TitlePreset[] = [
     },
   },
   {
-    id: 'quote', name: 'Editorial Quote', group: 'Cards & credits', text: '“Stay curious.”\n— Alex Morgan', seconds: 5,
+    id: 'quote', name: 'Editorial Quote', group: 'Cards & credits', text: '“Stay curious.”\n- Alex Morgan', seconds: 5,
     style: {
       y: 49, maxWidth: 80, fontFamily: font('Georgia'), fontSize: 11.5, fontWeight: 400, italic: true, color: '#f9ecd9',
       background: '#27213d', backgroundOpacity: 0.9, padding: 31, radius: 13, outlineWidth: 0, shadowBlur: 0,

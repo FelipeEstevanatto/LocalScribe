@@ -15018,7 +15018,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
     const selected = textFont.selectedOptions[0];
     fontCurrent.textContent = selected?.textContent?.trim() || fontLabelFromValue(textFont.value);
     fontCurrent.title = fontCurrent.textContent;
-    fontOpen.title = `${fontCurrent.textContent} — choose a font`;
+    fontOpen.title = `${fontCurrent.textContent}: choose a font`;
     fontAa.style.fontFamily = textFont.value || TEXT_FONT_OPTIONS[0].value;
   }
 
@@ -16832,7 +16832,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
       card.type = 'button';
       card.className = 'video-effect-card';
       card.dataset.effectId = effect.id;
-      card.title = `${effect.name} — ${effect.description}`;
+      card.title = `${effect.name}: ${effect.description}`;
       const preview = document.createElement('span');
       preview.className = 'video-effect-preview';
       preview.style.setProperty('--effect-filter', effect.filter);

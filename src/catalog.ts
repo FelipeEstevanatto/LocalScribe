@@ -989,7 +989,7 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     description:
       'Meta’s 300M multilingual CTC model, packaged for ONNX Runtime. It covers more than 1,600 languages, including hundreds with no other open ASR model, and takes raw 16 kHz audio without a separate feature frontend.',
     languages: '1,600+ languages',
-    languagesDetail: ['1,600+ languages — see the model card'],
+    languagesDetail: ['1,600+ languages (see the model card)'],
     languageCount: 1600,
     wer: 'Meta: character error rate below 10 for 78% of 1,600+ languages',
     release: '2025-11-10',

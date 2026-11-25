@@ -526,7 +526,7 @@ export function setupAudioStudio(root: HTMLElement, options: StudioOptions) {
     if (estimateFor !== version.blob) {
       estimate = null;
       estimateFor = null;
-      keyResult.textContent = bpmResult.textContent = '—';
+      keyResult.textContent = bpmResult.textContent = '-';
     }
     syncSelectionFields();
     updatePitchLabels();
@@ -1105,7 +1105,7 @@ export function setupAudioStudio(root: HTMLElement, options: StudioOptions) {
     selEnd.value = selection ? selection.end.toFixed(2) : '';
     selStart.placeholder = '0.00';
     selEnd.placeholder = version ? version.audio.duration.toFixed(2) : '';
-    selLength.textContent = selection ? formatClock(selection.end - selection.start, true) : '—';
+    selLength.textContent = selection ? formatClock(selection.end - selection.start, true) : '-';
     if (selection && player.range) player.range = { ...selection, loop: selLoop.checked };
     describeCut();
     update();
@@ -1365,8 +1365,8 @@ export function setupAudioStudio(root: HTMLElement, options: StudioOptions) {
   }
 
   function showEstimate(): void {
-    keyResult.textContent = estimate?.key ? `${estimate.key} ${estimate.mode === 'minor' ? 'min' : 'maj'}` : '—';
-    bpmResult.textContent = estimate?.bpm ? `${Math.round(estimate.bpm)}` : '—';
+    keyResult.textContent = estimate?.key ? `${estimate.key} ${estimate.mode === 'minor' ? 'min' : 'maj'}` : '-';
+    bpmResult.textContent = estimate?.bpm ? `${Math.round(estimate.bpm)}` : '-';
     if (!estimate) keyLine.innerHTML = 'Original key unknown. <button type="button" class="text-indigo-300 underline-offset-2 hover:underline" data-studio-detect>Detect key &amp; BPM</button>';
     keyLine.querySelector('[data-studio-detect]')?.addEventListener('click', () => detect());
     if (estimate && !estimate.key) keyLine.textContent = 'Key could not be detected.';

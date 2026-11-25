@@ -149,7 +149,7 @@ export const USE_CASES: SeoPage[] = [
     nav: 'Audio to text',
     eyebrow: 'Speech & audio',
     title: 'Audio to text, without uploading the audio',
-    metaTitle: 'Audio to text in your browser — no upload | LocalScribe',
+    metaTitle: 'Audio to text in your browser, no upload | LocalScribe',
     metaDescription:
       'Transcribe OGG, WAV, MP3, M4A, MP4, or WebM entirely in your browser. Ten local speech models, editable text, SRT/VTT export, no account, no backend.',
     intro: [
@@ -159,7 +159,7 @@ export const USE_CASES: SeoPage[] = [
     bullets: [
       {
         title: 'Ten speech models',
-        body: 'Fluid Speech, Moonshine, Parakeet, Phonon, Rumble, Qwen3-ASR, Omnilingual, and Granite Speech — none of them require an API key.',
+        body: 'Fluid Speech, Moonshine, Parakeet, Phonon, Rumble, Qwen3-ASR, Omnilingual, and Granite Speech. None of them require an API key.',
       },
       {
         title: 'Audio and video input',
@@ -202,7 +202,7 @@ export const USE_CASES: SeoPage[] = [
     nav: 'Dictation',
     eyebrow: 'Dictation',
     title: 'Browser dictation that keeps every word on your device',
-    metaTitle: 'Browser dictation — speak and get text locally | LocalScribe',
+    metaTitle: 'Browser dictation: speak and get text locally | LocalScribe',
     metaDescription:
       'Dictate into a browser page with a local speech model. Record, stop, edit, and copy. No audio upload, no account, offline after the first download.',
     intro: [
@@ -451,7 +451,7 @@ export const USE_CASES: SeoPage[] = [
     nav: 'Lectures',
     eyebrow: 'Use case',
     title: 'Transcribe lectures, talks, and long recordings',
-    metaTitle: 'Lecture transcription in your browser — local | LocalScribe',
+    metaTitle: 'Lecture transcription in your browser, local | LocalScribe',
     metaDescription:
       'Turn a lecture recording into editable notes locally. Long audio, multilingual models, Markdown export, and offline use after the first download.',
     intro: [
