@@ -46,7 +46,7 @@ describe('UI translations', () => {
 
   test('copy uses no em dash', () => {
     for (const name of ['ui-strings.json', ...LANGS.map((lang) => `ui-${lang}.json`)]) {
-      expect(read(name).filter((entry) => entry.includes('—'))).toEqual([]);
+      expect(read(name).filter((entry) => entry.includes('\u2014'))).toEqual([]);
     }
   });
 });
