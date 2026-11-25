@@ -2917,12 +2917,16 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
     projectName.value = name;
     projectNameIsDefault = false;
     preset.value = projectSettingsResolution.value;
+    let sizeNote = '';
     if (preset.value === 'custom') {
       const fallback = outputDimensions();
       const width = Number(projectSettingsCustomWidth.value) || fallback.width;
       const height = Number(projectSettingsCustomHeight.value) || fallback.height;
       customWidth = Math.max(2, Math.min(7680, Math.round(width / 2) * 2));
       customHeight = Math.max(2, Math.min(7680, Math.round(height / 2) * 2));
+      if (customWidth !== Math.round(width) || customHeight !== Math.round(height)) {
+        sizeNote = ` Size set to ${customWidth} × ${customHeight}: video encoders need even dimensions up to 7680.`;
+      }
       projectSettingsCustomWidth.value = String(customWidth);
       projectSettingsCustomHeight.value = String(customHeight);
     }
@@ -2969,7 +2973,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
     update();
     closeProjectSettingsModal();
     if (wantsCaptionFile) captionFile.click();
-    else status.textContent = 'Project settings updated.';
+    else status.textContent = `Project settings updated.${sizeNote}`;
   }
 
   projectSettingsGpuPreview.checked = compositorPreference() !== 'css';
@@ -18865,7 +18869,9 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
 
   function presetOverrides(key: string): Partial<MergeSettings> | null {
     switch (key) {
-      case 'standard': return { format: 'mp4', preset: 'source', quality: 90, targetMB: null };
+      // "Standard" follows the project's timeline resolution, including a
+      // custom size, instead of forcing the first clip's source size.
+      case 'standard': return { format: 'mp4', preset: preset.value as MergePreset, quality: 90, targetMB: null };
       case '4k': return { format: 'mp4', preset: '2160p', quality: 88, targetMB: null };
       case '1080p': return { format: 'mp4', preset: '1080p', quality: 94, targetMB: null };
       case '720p': return { format: 'mp4', preset: '720p', quality: 88, targetMB: null };
