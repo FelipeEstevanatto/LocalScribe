@@ -3574,9 +3574,22 @@ async function loadVisionImage(file: File): Promise<void> {
     clearVisionResult();
     els.visionStatus.textContent = 'Image ready.';
   } catch (error) {
-    els.visionStatus.textContent = `Could not decode that image: ${describeError(
+    // Drop the previous image so Run cannot silently process a picture the
+    // user just tried to replace.
+    if (visionSourceUrl) URL.revokeObjectURL(visionSourceUrl);
+    visionSourceUrl = null;
+    visionSourceFile = null;
+    visionSource = null;
+    visionPoints = [];
+    els.visionPreview.removeAttribute('src');
+    els.visionPreview.classList.add('hidden');
+    els.visionPreviewEmpty.classList.remove('hidden');
+    els.visionDrop.setAttribute('aria-label', 'Add an image');
+    els.visionFileName.textContent = '';
+    clearVisionResult();
+    els.visionStatus.textContent = `Could not decode ${file.name}: ${describeError(
       error,
-    )}`;
+    )}. Choose another image.`;
   } finally {
     visionImageLoading = false;
   }
