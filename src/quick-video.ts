@@ -216,6 +216,10 @@ async function browserVideoExport(
   const format = operation === 'video-compressor' ? 'mp4' : options.format;
   if (!nativeFormat(format) || typeof VideoEncoder === 'undefined') return null;
   if (options.rotation || options.flipX || options.flipY || options.overlay) return null;
+  // "Fast cut" promises a keyframe stream copy. The WebCodecs exporter can
+  // only copy when the head is not trimmed, so a fast cut that moves the
+  // start goes to FFmpeg's stream copy instead of being silently re-encoded.
+  if (operation === 'video-trimmer' && options.copy && options.range.start > 0) return null;
   const { preset, maxShortEdge } = resolutionSettings(options.resolution);
   const mime = VIDEO_FORMATS[format].mime;
   try {
@@ -308,6 +312,14 @@ export async function processVideo(ffmpeg: AudioFfmpeg, operation: VideoOperatio
   const one = (blob: Blob, extension: string, note?: string): VideoOutput => ({
     files: [{ name: `${base}-${operation}.${extension}`, blob }], note,
   });
+  // Converting to the container the file already uses, with nothing else to
+  // change, re-encoded the video and made it larger (1.29 MB to 2.02 MB in
+  // the review). Copy the streams instead; quality cannot improve anyway.
+  const sourceExt = file.name.split('.').pop()?.toLowerCase() ?? '';
+  if (operation === 'video-converter' && !options.copy && sourceExt === options.format && !options.resolution &&
+    !options.rotation && !options.flipX && !options.flipY && !options.overlay) {
+    options = { ...options, copy: true };
+  }
   if (operation === 'extract-audio') {
     const { audioFormat, track } = options;
     const spec = AUDIO_FORMATS[audioFormat];
