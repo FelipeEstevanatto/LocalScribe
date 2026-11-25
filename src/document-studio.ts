@@ -1286,15 +1286,30 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
     const password = pdfPassword.value;
     metadataSetStatus('Unlocking PDF locally…');
     try {
-      const { PDFDocument } = await import('@cantoo/pdf-lib');
+      const { PDFDocument, PDFDict, PDFInvalidObject, PDFName, PDFStream } = await import('@cantoo/pdf-lib');
       let document;
       try {
         document = await PDFDocument.load(await sourceFile.arrayBuffer(), { password });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(/password/i.test(message)
-          ? 'This PDF is protected by an open password. Enter the password above and try again.'
-          : message);
+        if (/incorrect/i.test(message)) throw new Error('That password is not correct for this PDF. Check it and try again.');
+        if (/needs password|password/i.test(message)) {
+          throw new Error(password
+            ? 'That password did not open this PDF. Check it and try again.'
+            : 'This PDF is protected by an open password. Enter the password above and try again.');
+        }
+        throw new Error(message);
+      }
+      // Decrypting leaves the old encryption dictionary and the original
+      // trailer (which still names /Encrypt) as unreferenced objects. Remove
+      // them so the saved file carries no encryption data at all.
+      for (const [ref, object] of document.context.enumerateIndirectObjects()) {
+        const dict = object instanceof PDFStream ? object.dict : object;
+        const isSecurityDict = dict instanceof PDFDict &&
+          (dict.has(PDFName.of('Encrypt')) || (dict.get(PDFName.of('Filter')) === PDFName.of('Standard') && dict.has(PDFName.of('O'))));
+        const isStaleTrailer = object instanceof PDFInvalidObject &&
+          new TextDecoder('latin1').decode((object as unknown as { data: Uint8Array }).data).includes('/Encrypt');
+        if (isSecurityDict || isStaleTrailer) document.context.delete(ref);
       }
       const bytes = await document.save({ useObjectStreams: false });
       options.download(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${baseName(sourceFile.name)}-unlocked.pdf`);
