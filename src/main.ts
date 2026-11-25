@@ -394,7 +394,7 @@ const VIEW_META: Record<
     eyebrow: 'Speech & audio',
     title: 'Text to speech',
     description:
-      'Four local voice engines, including zero-shot cloning. Audition voices, generate speech, and export in eight formats.',
+      'Six local voice engines, including zero-shot cloning. Audition voices, generate speech, and export in seven formats.',
   },
   vision: {
     eyebrow: 'Vision & image',
