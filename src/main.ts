@@ -1998,14 +1998,30 @@ function bindEvents(): void {
     void runQueue();
   });
   els.queueCancel.addEventListener('click', () => {
-    queuePauseRequested = true;
+    // First click: finish the current file, then stop. Second click: stop now.
+    if (!queuePauseRequested) {
+      queuePauseRequested = true;
+      els.queueCancel.textContent = translateUi('Stop now');
+      els.queueStatus.textContent = translateUi('The queue will pause after this file.');
+      return;
+    }
     state.controller?.abort();
     els.queueCancel.disabled = true;
-    els.queueStatus.textContent = translateUi('Pausing the queue…');
+    els.queueStatus.textContent = translateUi('Stopping the current file…');
   });
 
   els.queueList.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    const retry = target.closest<HTMLButtonElement>('[data-queue-retry]');
+    if (retry) {
+      const entry = queueFiles[Number(retry.dataset.queueRetry)];
+      if (entry) {
+        entry.status = 'queued';
+        entry.error = undefined;
+        void runQueue(entry);
+      }
+      return;
+    }
     const download = target.closest<HTMLButtonElement>('[data-queue-download]');
     if (download) {
       const entry = queueFiles[Number(download.dataset.queueDownload)];
@@ -2390,7 +2406,8 @@ function renderQueue(): void {
     !queueFiles.some((entry) => entry.status !== 'done') || queueRunning || state.busy !== 'idle';
   els.queueClear.disabled = queueRunning || count === 0;
   els.queueCancel.classList.toggle('hidden', !queueRunning);
-  els.queueCancel.disabled = queuePauseRequested || !state.controller || state.controller.signal.aborted;
+  els.queueCancel.disabled = !queueRunning || Boolean(state.controller?.signal.aborted);
+  if (!queueRunning) els.queueCancel.textContent = translateUi('Pause queue');
   els.queueAddPage.disabled = queueRunning || state.busy !== 'idle';
   els.queueSettingsChange.disabled = queueRunning || state.busy !== 'idle';
 
@@ -2405,10 +2422,13 @@ function renderQueue(): void {
             file.size,
           )}</span>
           <span class="text-[10px] text-slate-400" role="status">${{
-            queued: 'Queued', running: 'Processing', failed: 'Failed · retry available',
-            cancelled: 'Cancelled · retry available', empty: 'No transcript · retry available', done: 'Complete',
+            queued: 'Queued', running: 'Processing', failed: 'Failed',
+            cancelled: 'Cancelled', empty: 'No speech found', done: 'Complete',
           }[status]}</span>
           ${text ? `<button type="button" data-queue-download="${index}" class="btn-ghost" aria-label="${escapeHtml(translateUi('Download transcript'))} · ${escapeHtml(file.name)}">TXT</button>` : ''}
+          ${status === 'failed' || status === 'cancelled' || status === 'empty'
+            ? `<button type="button" data-queue-retry="${index}" class="btn-ghost" ${queueRunning || state.busy !== 'idle' ? 'disabled' : ''} aria-label="${escapeHtml(translateUi('Retry'))} · ${escapeHtml(file.name)}">${escapeHtml(translateUi('Retry'))}</button>`
+            : ''}
           <button
             type="button"
             data-queue-remove="${index}"
@@ -2423,9 +2443,9 @@ function renderQueue(): void {
     .join('');
 }
 
-async function runQueue(): Promise<void> {
+async function runQueue(only?: (typeof queueFiles)[number]): Promise<void> {
   if (queueRunning || state.busy !== 'idle') return;
-  const pending = queueFiles.filter((entry) => entry.status !== 'done');
+  const pending = only ? [only] : queueFiles.filter((entry) => entry.status !== 'done');
   if (!pending.length) return;
 
   queueRunning = true;
