@@ -5189,6 +5189,20 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
   function restore(state: Snapshot): void {
     restoring = true;
     pause();
+    // A snapshot taken before a filmstrip or waveform finished building holds
+    // null for it. Keep whatever the current session has already built, keyed
+    // by media, so undo never drops thumbnails.
+    const builtStrips = new Map<string, Strip>();
+    const builtPeaks = new Map<string, VideoClip['peaks']>();
+    for (const asset of assets) {
+      if (asset.strip && asset.kind !== 'image') builtStrips.set(asset.key, asset.strip);
+      if (asset.peaks) builtPeaks.set(asset.key, asset.peaks);
+    }
+    for (const clip of videos) {
+      const key = mediaKey(clip.file);
+      if (clip.strip && !clip.image && !builtStrips.has(key)) builtStrips.set(key, clip.strip);
+      if (clip.peaks && !builtPeaks.has(key)) builtPeaks.set(key, clip.peaks);
+    }
     for (const clip of videos) {
       URL.revokeObjectURL(clip.url);
       if (clip.proxyUrl) URL.revokeObjectURL(clip.proxyUrl);
@@ -5206,12 +5220,14 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
       return {
         ...asset,
         url,
-        strip: asset.kind === 'image' ? url : asset.strip,
+        strip: asset.kind === 'image' ? url : asset.strip ?? builtStrips.get(asset.key) ?? null,
+        peaks: asset.peaks ?? builtPeaks.get(asset.key) ?? asset.peaks,
         proxyUrl: asset.proxy ? URL.createObjectURL(asset.proxy.blob) : '',
       };
     });
     videos = state.videos.map((clip) => {
-      const asset = assets.find((entry) => entry.key === mediaKey(clip.file));
+      const key = mediaKey(clip.file);
+      const asset = assets.find((entry) => entry.key === key);
       const url = URL.createObjectURL(clip.file);
       return {
         ...clip,
@@ -5221,7 +5237,8 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
         proxy: clip.proxy,
         proxyUrl: clip.proxy ? URL.createObjectURL(clip.proxy.blob) : '',
         url,
-        strip: asset?.kind === 'image' ? asset.url : clip.image ? url : clip.strip,
+        strip: asset?.kind === 'image' ? asset.url : clip.image ? url : clip.strip ?? builtStrips.get(key) ?? null,
+        peaks: clip.peaks ?? builtPeaks.get(key) ?? null,
       };
     });
     videoTrackCount = Math.max(1, state.videoTrackCount, ...videos.map((clip) => clip.track + 1));
@@ -5272,6 +5289,12 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
     render();
     seek(Math.min(time, timelineEnd()));
     restoring = false;
+    // Anything still missing (built in no snapshot and not in memory) is
+    // queued again rather than left as a flat block.
+    refreshSavedThumbnails();
+    for (const clip of videos) {
+      if (!clip.image && !clip.peaks && clip.probe?.hasAudio) loadVideoPeaks(clip, new AbortController().signal);
+    }
     scheduleAudioMix();
     updateHistoryButtons();
     if (captionSource.value === 'embedded') updateCaptions();
