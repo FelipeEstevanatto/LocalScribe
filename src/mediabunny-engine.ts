@@ -462,7 +462,11 @@ export class MediabunnyEngine implements MediaEngine {
       let sampleRate = 0;
       let channels = 0;
       let frames = 0;
-      const origin = start;
+      // Containers such as MPEG-TS often start their timestamps above zero
+      // (1.44 s in a typical broadcast capture). Measure from the first audio
+      // packet so that offset is not decoded as leading silence.
+      const first = Math.max(0, await track.getFirstTimestamp());
+      const origin = trim ? start : Math.max(start, first);
       for await (const { buffer, timestamp } of sink.buffers(start, end, { skipLiveWait: true })) {
         signal?.throwIfAborted();
         if (!sampleRate) {
