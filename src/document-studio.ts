@@ -29,6 +29,13 @@ interface DocumentPage {
   image: PdfPageImage;
   lines: OcrLine[];
   boxes: RedactionBox[];
+  /** True once OCR has run on this page, even when it found no text. */
+  scanned?: boolean;
+}
+
+/** One-based numbers of the pages that OCR has not checked yet. */
+export function unscannedPages(pages: readonly { scanned?: boolean }[]): number[] {
+  return pages.flatMap((page, pageIndex) => (page.scanned ? [] : [pageIndex + 1]));
 }
 
 const MAX_PDF_PAGES = 30;
@@ -393,7 +400,7 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
   function updateButtons(): void {
     const ready = Boolean(bitmap) && !busy;
     detectButton.disabled = !ready;
-    piiButton.disabled = !ready || !currentPage()?.lines.length;
+    piiButton.disabled = !ready || !pages.some((page) => page.lines.length);
     drawButton.disabled = !ready;
     undoButton.disabled = !ready || !currentPage()?.boxes.length;
     clearButton.disabled = !ready || !currentPage()?.boxes.length;
@@ -566,9 +573,7 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
   }
 
   async function detectText(): Promise<void> {
-    const page = currentPage();
-    if (!page || busy) return;
-    await ensurePageRendered(page, index);
+    if (!pages.length || busy) return;
     busy = true;
     updateButtons();
     try {
@@ -577,27 +582,37 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
       await loadOcr((loaded, total) => {
         setStatus(`Downloading OCR model · ${Math.round((loaded / total) * 100)}%`);
       });
-      const source = canvasFor(page.image.width, page.image.height);
-      const sourceContext = source.getContext('2d', { willReadFrequently: true });
-      if (!sourceContext) throw new Error('Could not read the page pixels.');
-      const sourceBitmap = page === currentPage() && bitmap
-        ? bitmap
-        : await createImageBitmap(page.image.blob);
-      sourceContext.drawImage(sourceBitmap, 0, 0);
-      if (sourceBitmap !== bitmap) sourceBitmap.close();
-      const pixels = sourceContext.getImageData(0, 0, source.width, source.height);
-      setStatus('Finding text…');
-      page.lines = await runOcr(
-        { data: pixels.data, width: source.width, height: source.height, channels: 4 },
-        {
-          maxSide: 1800,
-          onProgress: (fraction, text) => setStatus(`${text} · ${Math.round(fraction * 100)}%`),
-        },
-      );
-      page.boxes = [];
+      // Scan every page, not only the one on screen. Redaction is only
+      // trustworthy when PII selection can see the whole document.
+      let found = 0;
+      for (const [pageIndex, page] of pages.entries()) {
+        await ensurePageRendered(page, pageIndex);
+        const source = canvasFor(page.image.width, page.image.height);
+        const sourceContext = source.getContext('2d', { willReadFrequently: true });
+        if (!sourceContext) throw new Error('Could not read the page pixels.');
+        const sourceBitmap = page === currentPage() && bitmap
+          ? bitmap
+          : await createImageBitmap(page.image.blob);
+        sourceContext.drawImage(sourceBitmap, 0, 0);
+        if (sourceBitmap !== bitmap) sourceBitmap.close();
+        const pixels = sourceContext.getImageData(0, 0, source.width, source.height);
+        const label = pages.length > 1 ? `Page ${pageIndex + 1} of ${pages.length} · ` : '';
+        setStatus(`${label}Finding text…`);
+        page.lines = await runOcr(
+          { data: pixels.data, width: source.width, height: source.height, channels: 4 },
+          {
+            maxSide: 1800,
+            onProgress: (fraction, text) => setStatus(`${label}${text} · ${Math.round(fraction * 100)}%`),
+          },
+        );
+        page.boxes = page.boxes.filter((box) => box.line === undefined);
+        page.scanned = true;
+        found += page.lines.length;
+      }
       render();
       renderLines();
-      setStatus(page.lines.length ? `${page.lines.length} line${page.lines.length === 1 ? '' : 's'} found. Check the lines to redact, or draw boxes.` : 'No text found on this page.', page.lines.length ? 'good' : 'normal');
+      const scope = pages.length > 1 ? ` across ${pages.length} pages` : '';
+      setStatus(found ? `${found} line${found === 1 ? '' : 's'} found${scope}. Check the lines to redact, or draw boxes.` : `No text found${scope}.`, found ? 'good' : 'normal');
       updateButtons();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error), 'error');
@@ -608,20 +623,26 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
   }
 
   function selectPii(): void {
-    const page = currentPage();
-    if (!page) return;
+    if (!pages.length) return;
     let selected = 0;
-    for (const [lineIndex, line] of page.lines.entries()) {
-      if (!PII.test(line.text)) continue;
-      selected += 1;
-      if (!page.boxes.some((box) => box.line === lineIndex)) {
-        page.boxes.push({ ...lineBox(line), line: lineIndex });
+    const touched = new Set<number>();
+    for (const [pageIndex, page] of pages.entries()) {
+      for (const [lineIndex, line] of page.lines.entries()) {
+        if (!PII.test(line.text)) continue;
+        selected += 1;
+        touched.add(pageIndex + 1);
+        if (!page.boxes.some((box) => box.line === lineIndex)) {
+          page.boxes.push({ ...lineBox(line), line: lineIndex });
+        }
       }
     }
     render();
     renderLines();
     updateButtons();
-    setStatus(selected ? `${selected} likely sensitive line${selected === 1 ? '' : 's'} selected. Review before exporting.` : 'No obvious emails, phone numbers, or account numbers found.', selected ? 'good' : 'normal');
+    const where = pages.length > 1 && touched.size ? ` on page${touched.size === 1 ? '' : 's'} ${[...touched].join(', ')}` : '';
+    const missing = unscannedPages(pages);
+    const warning = missing.length ? ` Page${missing.length === 1 ? '' : 's'} ${missing.join(', ')} not scanned yet.` : '';
+    setStatus(selected ? `${selected} likely sensitive line${selected === 1 ? '' : 's'} selected${where}. Review before exporting.${warning}` : `No obvious emails, phone numbers, or account numbers found.${warning}`, selected ? 'good' : 'normal');
   }
 
   function clearBoxes(): void {
@@ -689,13 +710,22 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
     busy = true;
     updateButtons();
     try {
+      const missing = unscannedPages(pages);
+      if (missing.length && pages.some((page) => page.scanned)) {
+        const ok = window.confirm(`Page${missing.length === 1 ? '' : 's'} ${missing.join(', ')} ${missing.length === 1 ? 'has' : 'have'} not been scanned for text, so sensitive lines there are not selected. Export anyway?`);
+        if (!ok) {
+          setStatus('Export cancelled. Run Detect text to scan every page first.');
+          return;
+        }
+      }
       setStatus('Building the redacted PDF…');
       const { imagesToPdf } = await import('./pdf-doc');
       const rendered = [];
       for (const page of pages) rendered.push(await pageWithRedactions(page));
       const blob = await imagesToPdf(rendered);
       options.download(blob, `${sourceName}-redacted.pdf`);
-      setStatus('Redacted PDF downloaded. The original text layer and metadata are gone.', 'good');
+      const redacted = pages.filter((page) => page.boxes.length).length;
+      setStatus(`Redacted PDF downloaded: ${redacted} of ${pages.length} page${pages.length === 1 ? '' : 's'} had boxes. The original text layer and metadata are gone.`, 'good');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error), 'error');
     } finally {
