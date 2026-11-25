@@ -366,31 +366,86 @@ async function textToPdf(title: string, text: string, signal?: AbortSignal): Pro
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const paragraphs = text.replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n');
-  try {
-    for (const line of [title, ...paragraphs]) font.encodeText(line);
-  } catch {
+  const encodable = (value: string): boolean => {
+    try {
+      font.encodeText(value);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  // Without a canvas there is no way to draw characters Helvetica lacks.
+  if (typeof document === 'undefined' && !paragraphs.every(encodable)) {
     return rasterTextToPdf(title, text, signal);
   }
   const margin = 42;
   const width = 595;
   const height = 842;
   const size = 12;
+  const lineHeight = 18;
   const available = width - 2 * margin;
   let page = pdf.addPage([width, height]);
   let y = height - margin;
   pdf.setTitle(title);
 
-  function draw(line: string): void {
+  function nextLine(): void {
     if (y < margin) {
       page = pdf.addPage([width, height]);
       y = height - margin;
     }
+  }
+
+  function draw(line: string): void {
+    nextLine();
     if (line) page.drawText(line, { x: margin, y, size, font });
-    y -= 18;
+    y -= lineHeight;
+  }
+
+  // Lines with characters the standard PDF font cannot encode (CJK, emoji,
+  // most non-Latin scripts) are drawn as images. Every other line stays real,
+  // selectable text, instead of rasterising the whole document.
+  const scale = 3;
+  const fontCss = `${size * scale}px Helvetica, Arial, "Noto Sans", "Noto Sans CJK JP", "Segoe UI", "Segoe UI Emoji", sans-serif`;
+  let measureContext: CanvasRenderingContext2D | null = null;
+  const measure = (value: string): number => {
+    measureContext ??= canvasFor({ width: 8, height: 8 }).getContext('2d')!;
+    measureContext.font = fontCss;
+    return measureContext.measureText(value).width / scale;
+  };
+
+  async function drawRaster(line: string): Promise<void> {
+    nextLine();
+    if (line.trim()) {
+      const canvas = canvasFor({ width: Math.ceil(available * scale), height: lineHeight * scale });
+      const ctx = canvas.getContext('2d')!;
+      ctx.font = fontCss;
+      ctx.fillStyle = '#000';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(line, 0, Math.round(lineHeight * scale * 0.72));
+      const png = await pdf.embedPng(await (await toBlob(canvas)).arrayBuffer());
+      page.drawImage(png, { x: margin, y: y - lineHeight * 0.28, width: available, height: lineHeight });
+    }
+    y -= lineHeight;
+  }
+
+  async function drawWrappedRaster(paragraph: string): Promise<void> {
+    let line = '';
+    for (const word of paragraph.match(/\S+\s*|^\s+/g) ?? []) {
+      if (line && measure(line + word.trimEnd()) > available) {
+        await drawRaster(line.trimEnd());
+        line = '';
+      }
+      line += word;
+    }
+    await drawRaster(line.trimEnd());
   }
 
   for (const paragraph of paragraphs) {
     signal?.throwIfAborted();
+    if (!encodable(paragraph)) {
+      await drawWrappedRaster(paragraph);
+      continue;
+    }
     let line = '';
     let lineWidth = 0;
     for (const word of paragraph.match(/\S+\s*|^\s+/g) ?? []) {
