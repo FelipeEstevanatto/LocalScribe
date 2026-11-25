@@ -4889,6 +4889,8 @@ async function transcribe(): Promise<'done' | 'empty' | 'cancelled' | 'failed' |
 
   setBusy('transcribing');
   transcribeJob = startJob(`Transcribing ${state.file?.name ?? 'audio'}`, 'transcribe');
+  // What the job tray reports when this run ends. Each exit path sets it.
+  let jobOutcome: { message: string; ok: boolean } = { message: 'Stopped.', ok: false };
   resetProgressBars();
   els.progressPanel.classList.remove('hidden');
   els.downloadProgress.classList.add('hidden');
@@ -5007,6 +5009,8 @@ async function transcribe(): Promise<'done' | 'empty' | 'cancelled' | 'failed' |
       renderSegments();
     }
 
+    // Punctuation or blank tokens alone are not a transcript.
+    if (!/[\p{L}\p{N}]/u.test(text)) text = '';
     els.transcript.value = text;
     updateCounts();
     updateTranscriptButtons();
@@ -5039,8 +5043,10 @@ async function transcribe(): Promise<'done' | 'empty' | 'cancelled' | 'failed' |
         } segment${chunks.length === 1 ? '' : 's'}. The text is fully editable.`,
       );
       showToast('Transcript ready.');
+      jobOutcome = { message: 'Transcript ready.', ok: true };
     } else {
       setStatus('No speech was detected. Try a clearer recording or a different file.');
+      jobOutcome = { message: 'No speech detected.', ok: false };
     }
 
     if (text && els.autoSpeakers.checked) queueMicrotask(() => void detectSpeakers());
@@ -5060,16 +5066,18 @@ async function transcribe(): Promise<'done' | 'empty' | 'cancelled' | 'failed' |
         );
         showToast('Transcription cancelled.');
       }
+      jobOutcome = { message: partial ? 'Cancelled. Partial transcript kept.' : 'Cancelled.', ok: false };
       return 'cancelled';
     } else {
       showError(error);
+      jobOutcome = { message: 'Transcription failed.', ok: false };
       return 'failed';
     }
   } finally {
     if (state.engine && !state.engine.backend) await dropEngine();
     state.controller = null;
     setBusy('idle');
-    transcribeJob?.finish(els.transcript.value.trim() ? 'Transcript ready.' : 'Stopped.', Boolean(els.transcript.value.trim()));
+    transcribeJob?.finish(jobOutcome.message, jobOutcome.ok);
     transcribeJob = null;
     els.downloadProgress.classList.add('hidden');
     els.inferenceProgress.classList.add('hidden');
