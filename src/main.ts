@@ -98,6 +98,9 @@ import {
 } from './reverb';
 import {
   clearModelCache,
+  clearOtherCachedModel,
+  listOtherCachedModels,
+  type OtherCachedModel,
   clearModelCacheFor,
   detectWebGPU,
   getModelCacheStatus,
@@ -1903,6 +1906,21 @@ function bindEvents(): void {
     if (clearButton) {
       event.preventDefault();
       void clearModelCacheForId(clearButton.dataset.clearModel as ModelId);
+      return;
+    }
+
+    const clearOther = target.closest<HTMLButtonElement>('[data-clear-other]');
+    if (clearOther) {
+      event.preventDefault();
+      const row = otherCachedModels[Number(clearOther.dataset.clearOther)];
+      if (!row || !window.confirm(`Delete the cached ${row.label} files (${formatBytes(row.bytes)})? They download again on next use.`)) return;
+      clearOther.disabled = true;
+      void clearOtherCachedModel(row)
+        .then(() => {
+          invalidateCacheStatuses();
+          return Promise.allSettled([refreshCacheStatus(), refreshStorageStatus()]);
+        })
+        .then(() => showToast(`${row.label} removed from this browser.`));
       return;
     }
 
@@ -5944,6 +5962,7 @@ async function refreshDownloadedModels(): Promise<void> {
         '<p class="rounded-xl border border-white/5 bg-white/[0.03] px-3 py-3 text-[11px] text-slate-400">Nothing downloaded yet. The selected model will appear here after its first download.</p>';
       els.clearAllCacheBtn.disabled = true;
       cacheStatusSnapshotAt = Date.now();
+      await appendOtherCachedModels(true);
       return;
     }
 
@@ -5976,6 +5995,7 @@ async function refreshDownloadedModels(): Promise<void> {
     renderModelCards();
     els.clearAllCacheBtn.disabled = state.busy !== 'idle';
     cacheStatusSnapshotAt = Date.now();
+    await appendOtherCachedModels(false);
   })();
 
   try {
@@ -5983,6 +6003,38 @@ async function refreshDownloadedModels(): Promise<void> {
   } finally {
     cacheStatusScan = null;
   }
+}
+
+let otherCachedModels: OtherCachedModel[] = [];
+
+/**
+ * Add voice, vision, OCR, separation and other caches under the speech
+ * models, so every byte the app stores can be seen and cleared here.
+ */
+async function appendOtherCachedModels(speechListEmpty: boolean): Promise<void> {
+  otherCachedModels = await listOtherCachedModels().catch(() => []);
+  if (!otherCachedModels.length) return;
+  if (speechListEmpty) els.downloadedModels.innerHTML = '';
+  const rows = otherCachedModels.map((row, index) => `
+    <div class="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2">
+      <span class="min-w-0 flex-1">
+        <span class="flex items-center gap-2">
+          <span class="truncate text-xs font-medium text-slate-200" data-no-i18n>${escapeHtml(row.label)}</span>
+          <span class="badge badge-good">Cached</span>
+        </span>
+        <span class="mt-0.5 block truncate text-[10px] text-slate-400">${formatBytes(row.bytes)}</span>
+      </span>
+      <button type="button" class="icon-btn shrink-0" data-clear-other="${index}" aria-label="Delete cached ${escapeHtml(row.label)}">
+        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v5M14 11v5" />
+        </svg>
+      </button>
+    </div>`).join('');
+  els.downloadedModels.insertAdjacentHTML(
+    'beforeend',
+    `<p class="mt-3 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Voice, vision, and tool models</p>${rows}`,
+  );
+  els.clearAllCacheBtn.disabled = state.busy !== 'idle';
 }
 
 async function refreshStorageStatus(): Promise<void> {

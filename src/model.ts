@@ -2,6 +2,7 @@ import {
   getModel,
   getVariant,
   resolveModelFiles,
+  SUPPORTED_MODELS,
   type ModelFileRole,
   type ModelId,
   type ResolvedModelFile,
@@ -214,6 +215,86 @@ export async function getStorageInfo(): Promise<StorageInfo> {
   }
 }
 
+/** A cached model that is not one of the speech models in the catalog. */
+export interface OtherCachedModel {
+  id: string;
+  label: string;
+  bytes: number;
+  cacheName: string;
+  /** For entries inside transformers-cache: the Hugging Face repo prefix. */
+  repo?: string;
+}
+
+const OTHER_CACHE_LABELS: Record<string, string> = {
+  'localscribe-woof-v1': 'Underdog Woof voice',
+  'localscribe-diarization-v1': 'Speaker detection',
+  'localscribe-ocr-v1': 'PP-OCR text recognition',
+  'localscribe-cactus-v1': 'Cactus engine',
+  'localscribe-htdemucs-v1': 'HTDemucs stem separation',
+  'localscribe-supertonic-v1': 'Supertonic 3 voice',
+  'kokoro-voices': 'Kokoro voice styles',
+};
+
+async function responseBytes(response: Response | undefined): Promise<number> {
+  if (!response) return 0;
+  const length = Number(response.headers.get('content-length'));
+  if (Number.isFinite(length) && length > 0) return length;
+  return (await response.blob().catch(() => null))?.size ?? 0;
+}
+
+/**
+ * List every cached model outside the speech catalog: vision, TTS, OCR,
+ * separation, and other caches. Entries in the shared transformers-cache are
+ * grouped by Hugging Face repo, skipping repos that belong to speech models
+ * (those already appear in the downloaded speech models list).
+ */
+export async function listOtherCachedModels(): Promise<OtherCachedModel[]> {
+  const storage = cacheStorage();
+  if (!storage) return [];
+  const speechRepos = new Set(SUPPORTED_MODELS.map((model) => model.repo).filter(Boolean));
+  const names = await storage.keys().catch(() => [] as string[]);
+  const rows: OtherCachedModel[] = [];
+  for (const name of names) {
+    if (name === MODEL_CACHE_NAME || name.startsWith('localscribe-app-')) continue;
+    const cache = await storage.open(name).catch(() => null);
+    if (!cache) continue;
+    const keys = await cache.keys().catch(() => [] as readonly Request[]);
+    if (!keys.length) continue;
+    if (name === 'transformers-cache') {
+      const repos = new Map<string, number>();
+      for (const request of keys) {
+        const match = new URL(request.url).pathname.match(/^\/([^/]+\/[^/]+)\/resolve\//);
+        const repo = match?.[1] ?? 'other';
+        if (speechRepos.has(repo)) continue;
+        repos.set(repo, (repos.get(repo) ?? 0) + await responseBytes(await cache.match(request).catch(() => undefined)));
+      }
+      for (const [repo, bytes] of repos) {
+        rows.push({ id: `transformers:${repo}`, label: repo, bytes, cacheName: name, repo });
+      }
+      continue;
+    }
+    let bytes = 0;
+    for (const request of keys) bytes += await responseBytes(await cache.match(request).catch(() => undefined));
+    rows.push({ id: name, label: OTHER_CACHE_LABELS[name] ?? name, bytes, cacheName: name });
+  }
+  return rows.sort((a, b) => b.bytes - a.bytes);
+}
+
+/** Delete one row returned by listOtherCachedModels. */
+export async function clearOtherCachedModel(row: Pick<OtherCachedModel, 'cacheName' | 'repo'>): Promise<void> {
+  const storage = cacheStorage();
+  if (!storage) return;
+  if (!row.repo) {
+    await storage.delete(row.cacheName);
+    return;
+  }
+  const cache = await storage.open(row.cacheName).catch(() => null);
+  if (!cache) return;
+  const prefix = `/${row.repo}/resolve/`;
+  const keys = await cache.keys();
+  await Promise.all(keys.filter((request) => new URL(request.url).pathname.startsWith(prefix)).map((request) => cache.delete(request)));
+}
+
 export async function clearModelCache(): Promise<void> {
   const storage = cacheStorage();
   if (!storage) return;
@@ -221,6 +302,7 @@ export async function clearModelCache(): Promise<void> {
     storage.delete(MODEL_CACHE_NAME),
     storage.delete('transformers-cache'),
     storage.delete(MUSIC_MODEL_CACHE),
+    storage.delete('kokoro-voices'),
   ]);
 }
 
@@ -411,13 +493,22 @@ export async function getModelCacheStatuses(
         }
         let bytes = 0;
         let filesCached = 0;
+        let weightsCached = 0;
         for (const spec of specs) {
           if (!keys.has(spec.url)) continue;
           const response = await cache.match(spec.url).catch(() => undefined);
           if (!response) continue;
           filesCached += 1;
+          if (/\.onnx(?:_data)?(?:$|\?)/i.test(spec.url)) weightsCached += 1;
           const length = Number(response.headers.get('content-length'));
           bytes += Number.isFinite(length) && length > 0 ? length : spec.size;
+        }
+        // Variants share their config and tokenizer files. Those alone do not
+        // make a variant "Partial", or every sibling of a downloaded variant
+        // would show up as a phantom partial download.
+        if (!weightsCached && filesCached < specs.length) {
+          bytes = 0;
+          filesCached = 0;
         }
         results[index] = {
           available: true,
