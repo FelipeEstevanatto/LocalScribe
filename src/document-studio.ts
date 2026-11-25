@@ -11,7 +11,7 @@ import { asciiPreview, checksumsFor, headText, hexPreview, type FileChecksums } 
 import { sharedMedia } from './media-router';
 import type { OcrLine } from './ocr';
 import type { PdfMetadataResult, PdfPageImage } from './pdf-doc';
-import { createZip } from './zip';
+import { createZip, uniqueNames } from './zip';
 
 interface DocumentOptions {
   download: (blob: Blob, name: string) => void;
@@ -1415,17 +1415,29 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
     }[ext] || 'application/octet-stream';
     const out = `clean.${ext}`;
     const args = ['-i', 'input.media', '-map', '0', '-c', 'copy', '-map_metadata', '-1', '-map_chapters', '-1', '-fflags', '+bitexact'];
+    // Matroska attachments (fonts for ASS subtitles) need their filename and
+    // mimetype tags, or the muxer refuses to write the file. Keep only those.
+    if (['mkv', 'mka', 'webm'].includes(ext)) args.push('-map_metadata:s:t', '0:s:t');
     if (['mp4', 'm4v', 'mov', 'm4a'].includes(ext)) args.push('-movflags', '+faststart');
     args.push(out);
-    const blob = await sharedFfmpeg().run(file, args, out, mime);
+    let blob: Blob;
+    try {
+      blob = await sharedFfmpeg().run(file, args, out, mime);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`Could not remove metadata from this media file without re-encoding it. (Details: ${detail.split('\n')[0].slice(0, 160)})`);
+    }
     return new File([blob], `${baseName(file.name)}-clean.${ext}`, { type: mime });
   }
 
-  async function stripFile(file: File): Promise<File> {
-    if (isPdfFile(file)) return stripPdf(file);
-    if (isImageFile(file)) return stripImage(file);
-    if (file.type.startsWith('audio/') || file.type.startsWith('video/') || MEDIA_EXTENSIONS.has(extensionOf(file.name))) return stripMedia(file);
-    return new File([file], file.name, { type: file.type });
+  /** Strip metadata. `cleaned` is false for types this tool cannot clean. */
+  async function stripFile(file: File): Promise<{ file: File; cleaned: boolean }> {
+    if (isPdfFile(file)) return { file: await stripPdf(file), cleaned: true };
+    if (isImageFile(file)) return { file: await stripImage(file), cleaned: true };
+    if (file.type.startsWith('audio/') || file.type.startsWith('video/') || MEDIA_EXTENSIONS.has(extensionOf(file.name))) {
+      return { file: await stripMedia(file), cleaned: true };
+    }
+    return { file: new File([file], file.name, { type: file.type }), cleaned: false };
   }
 
   async function sha256(file: Blob): Promise<string> {
@@ -1452,33 +1464,53 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
     privacyOutputs = [];
     checksums = [];
     const failures: string[] = [];
+    const uncleaned: string[] = [];
     try {
       for (const [position, file] of privacyFiles.entries()) {
         privacySetStatus(`Processing ${position + 1} of ${privacyFiles.length} · ${file.name}`);
         try {
           let output = new File([file], file.name, { type: file.type });
-          if (action === 'strip' || action === 'all') output = await stripFile(file);
-          if (action === 'checksums' || action === 'all') {
-            const hash = await sha256(output);
-            checksums.push(`${hash}  ${output.name}`);
+          let cleaned = true;
+          if (action === 'strip' || action === 'all') {
+            const result = await stripFile(file);
+            output = result.file;
+            cleaned = result.cleaned;
+            if (!cleaned) uncleaned.push(file.name);
           }
-          if (action === 'rename' || action === 'all' || action === 'strip') {
-            const name = action === 'strip' ? output.name : renamed(file, pattern, position);
-            output = new File([output], name, { type: output.type });
+          // A file this tool could not clean keeps its own name, so a
+          // "-clean" suffix never claims that metadata was removed.
+          if (action === 'rename' || (action === 'all' && cleaned)) {
+            output = new File([output], renamed(file, pattern, position), { type: output.type });
           }
           privacyOutputs.push({ name: output.name, blob: output });
         } catch (error) {
           failures.push(`${file.name}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
+      // Hash after the final names are known, using the same de-duplicated
+      // names the ZIP will contain, so checksums.txt matches the archive.
+      const finalNames = uniqueNames(privacyOutputs.map((item) => item.name));
+      privacyOutputs = privacyOutputs.map((item, i) => ({ name: finalNames[i], blob: item.blob }));
+      if (action === 'checksums' || action === 'all') {
+        for (const item of privacyOutputs) {
+          try {
+            checksums.push(`${await sha256(item.blob)}  ${item.name}`);
+          } catch (error) {
+            failures.push(`${item.name}: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+      }
       if (checksums.length) {
         privacyOutputs.push({ name: 'checksums.txt', blob: new Blob([checksums.join('\n') + '\n'], { type: 'text/plain;charset=utf-8' }) });
       }
+      const notCleaned = uncleaned.length
+        ? ` Not cleaned (unsupported type, copied unchanged): ${uncleaned.join(', ')}.`
+        : '';
       privacySetStatus(
         failures.length
-          ? `${privacyOutputs.length ? `${privacyOutputs.length} result${privacyOutputs.length === 1 ? '' : 's'} ready. ` : ''}${failures.length} failed: ${failures.join('; ')}`
-          : `Ready: ${privacyFiles.length} file${privacyFiles.length === 1 ? '' : 's'} processed.`,
-        failures.length ? 'error' : 'good',
+          ? `${privacyOutputs.length ? `${privacyOutputs.length} result${privacyOutputs.length === 1 ? '' : 's'} ready. ` : ''}${failures.length} failed: ${failures.join('; ')}${notCleaned}`
+          : `Ready: ${privacyFiles.length} file${privacyFiles.length === 1 ? '' : 's'} processed.${notCleaned}`,
+        failures.length || uncleaned.length ? 'error' : 'good',
       );
     } finally {
       busy = false;

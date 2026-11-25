@@ -37,7 +37,7 @@ function dosTime(date: Date): { time: number; date: number } {
 }
 
 /** Unique names inside the archive ("a.mp3", "a (2).mp3", …). */
-function uniqueNames(names: string[]): string[] {
+export function uniqueNames(names: string[]): string[] {
   const seen = new Map<string, number>();
   return names.map((name) => {
     const count = seen.get(name) ?? 0;
