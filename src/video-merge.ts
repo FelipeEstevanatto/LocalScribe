@@ -18781,11 +18781,22 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
         sum + clip.file.size * (audioClipLength(clip) / Math.max(0.001, clip.duration)), 0);
       return (videoBytes + audioBytes) / 1_000_000;
     }
-    const rates: Record<MergePreset, number> = {
-      source: 5_000_000, '2160p': 28_000_000, '1080p': 6_000_000, '720p': 3_500_000,
-      '480p': 1_800_000, vertical: 6_000_000, square: 5_000_000, custom: 6_000_000,
-    };
-    return total * (rates[current.preset ?? 'source'] + (hasAudibleAudio(tracks) ? 192_000 : 0)) / 8 / 1_000_000;
+    // Bits per pixel per frame for the browser's H.264/VP9 encoders at the
+    // default quality. Fixed per-preset bitrates overestimated small outputs
+    // 4-6x (a 38 s 640x360 export said ~25 MB; it was 6.8 MB).
+    const { pixels, fps } = estimateFrameSize(current);
+    const videoRate = pixels * fps * (current.format === 'webm' ? 0.09 : 0.12);
+    return total * (videoRate + (hasAudibleAudio(tracks) ? 192_000 : 0)) / 8 / 1_000_000;
+  }
+
+  function estimateFrameSize(current: MergeSettings): { pixels: number; fps: number } {
+    const first = videos.find((clip) => !clip.image) ?? videos[0];
+    const size = targetSize(current.preset ?? 'source', {
+      width: first?.probe.width || 1280,
+      height: first?.probe.height || 720,
+    }, undefined, { width: current.customWidth, height: current.customHeight });
+    const fps = current.frameRate || first?.probe.fps || 30;
+    return { pixels: Math.max(1, size.width * size.height), fps: Math.min(120, Math.max(1, fps)) };
   }
 
   // Export range, presets, and the custom export dialog -----------------------
@@ -18914,12 +18925,12 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
 
   function estimateSeconds(current: MergeSettings, duration: number): number {
     if (duration <= 0) return 0;
-    const factors: Record<MergePreset, number> = {
-      source: 0.9, '2160p': 3.2, '1080p': 1.2, '720p': 0.65,
-      '480p': 0.35, vertical: 1.4, square: 1.1, custom: 1.2,
-    };
+    // Encode time scales with pixel throughput. Calibrated on hardware H.264:
+    // 38 s at 640x360 took about 6 s, so roughly 0.15 s per second of 360p30.
+    const { pixels, fps } = estimateFrameSize(current);
+    const load = (pixels * fps) / (640 * 360 * 30);
     const factor = current.format === 'webm' ? 1.35 : 1;
-    return Math.max(3, Math.round(3 + duration * factors[current.preset ?? 'source'] * factor));
+    return Math.max(2, Math.round(1 + duration * 0.15 * load * factor));
   }
 
   function exportDuration(): number {
