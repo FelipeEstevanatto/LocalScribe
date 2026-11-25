@@ -620,11 +620,34 @@ type KokoroModule = {
 
 export type KokoroMode = 'wasm' | 'webgpu' | 'wasm-q8';
 
+/**
+ * Resolve with `promise`, or reject with an AbortError as soon as `signal`
+ * aborts. The underlying work is not stopped, but the caller is released.
+ */
+export function raceAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  const abort = (): Error => {
+    const error = new Error('Speech generation cancelled.');
+    error.name = 'AbortError';
+    return error;
+  };
+  if (signal.aborted) return Promise.reject(abort());
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(abort());
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => { signal.removeEventListener('abort', onAbort); resolve(value); },
+      (error: unknown) => { signal.removeEventListener('abort', onAbort); reject(error); },
+    );
+  });
+}
+
 export class KokoroEngine {
   private tts: Awaited<
     ReturnType<KokoroModule['KokoroTTS']['from_pretrained']>
   > | null = null;
   private loading: Promise<void> | null = null;
+  private pending: Promise<unknown> | null = null;
   constructor(private readonly mode: KokoroMode = 'wasm') {}
 
   get isLoaded(): boolean {
@@ -685,7 +708,11 @@ export class KokoroEngine {
     speed: number,
     onProgress?: (index: number, total: number) => void,
     shouldCancel?: () => boolean,
+    signal?: AbortSignal,
   ): Promise<TtsResult> {
+    // A cancelled run may still be finishing its last sentence inside ONNX
+    // Runtime. Wait for it so two runs never share the session at once.
+    await this.pending?.catch(() => undefined);
     await this.load();
     const tts = this.tts;
     if (!tts) throw new Error('The Kokoro model is not loaded yet.');
@@ -704,7 +731,10 @@ export class KokoroEngine {
       }
 
       onProgress?.(index, list.length);
-      const audio = await tts.generate(list[index], { voice, speed });
+      const run = tts.generate(list[index], { voice, speed });
+      this.pending = run;
+      const audio = await raceAbort(run, signal);
+      this.pending = null;
       chunks.push(audio.audio);
       if (audio.sampling_rate > 0) sampleRate = audio.sampling_rate;
     }

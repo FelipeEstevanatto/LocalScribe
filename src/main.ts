@@ -6469,6 +6469,10 @@ async function generateSpeech(): Promise<void> {
 
   ttsBusy = true;
   els.ttsKokoroDevice.disabled = true;
+  // Switching engine or voice mid-generation used to warm another engine on
+  // the shared phonemizer and leave Kokoro stuck. Lock them until it ends.
+  els.ttsModel.disabled = true;
+  els.ttsVoice.disabled = true;
   ttsCancelled = false;
   ttsAbort = new AbortController();
   els.ttsGenerateBtn.disabled = true;
@@ -6531,6 +6535,7 @@ async function generateSpeech(): Promise<void> {
           setBar(els.ttsProgressBar, percent);
         },
         () => ttsCancelled,
+        ttsAbort.signal,
       );
     } else if (ttsModelId === 'woof') {
       if (!woofEngine) woofEngine = new WoofTtsEngine();
@@ -6666,6 +6671,8 @@ async function generateSpeech(): Promise<void> {
   } finally {
     ttsBusy = false;
     els.ttsKokoroDevice.disabled = previewBusy;
+    els.ttsModel.disabled = false;
+    els.ttsVoice.disabled = false;
     ttsAbort = null;
     els.ttsGenerateBtn.disabled = false;
     els.ttsCancelBtn.classList.add('hidden');
