@@ -43,7 +43,7 @@ import { sharedFfmpeg } from './audio-ffmpeg';
 import { SAMPLE_TRANSCRIPT, wordErrorRate } from './benchmark';
 import { openWaveSource, summarizeWave, type WaveSource } from './wave-source';
 import type { WordTiming } from './transformers-asr';
-import { buildExport, EXPORT_FORMATS, type ExportFormat } from './exports';
+import { buildExport, EXPORT_FORMATS, realignSegments, type ExportFormat } from './exports';
 import { modelFit, prefersCompactModel, readDeviceProfile, type DeviceProfile } from './capabilities';
 import { JOB_PRESETS, type JobPreset } from './presets';
 import { MicrophoneRecorder } from './recorder';
@@ -1923,6 +1923,7 @@ function bindEvents(): void {
   els.transcript.addEventListener('input', () => {
     updateCounts();
     updateTranscriptButtons();
+    scheduleHistoryEditSave();
   });
 
   els.copyBtn.addEventListener('click', () => {
@@ -2778,6 +2779,8 @@ async function openHistoryEntry(id: string): Promise<void> {
   };
 
   els.transcript.value = entry.text;
+  lastHistoryEntry = entry;
+  navigate('transcribe');
   renderSegments();
   updateCounts();
   updateTranscriptButtons();
@@ -4214,6 +4217,26 @@ function renameSpeaker(index: number, chip: HTMLElement): void {
     if (event.key === 'Escape') commit(false);
   });
   input.addEventListener('blur', () => commit(true), { once: true });
+}
+
+let historyEditTimer = 0;
+
+/** Save manual transcript edits to the matching history entry, debounced. */
+function scheduleHistoryEditSave(): void {
+  window.clearTimeout(historyEditTimer);
+  if (!lastHistoryEntry || !isHistoryEnabled() || speakerLines) return;
+  historyEditTimer = window.setTimeout(() => {
+    const entry = lastHistoryEntry;
+    if (!entry || !isHistoryEnabled()) return;
+    entry.text = els.transcript.value;
+    entry.segments = realignSegments(entry.segments, entry.text).map((segment) => ({
+      start: segment.start,
+      end: segment.end,
+      text: segment.text,
+      words: segment.words,
+    }));
+    void saveHistory(entry).then(refreshHistory).catch(() => undefined);
+  }, 800);
 }
 
 /** Update the history entry of this transcript with the speaker turns. */
@@ -6159,7 +6182,7 @@ function downloadTranscript(): void {
     text,
     segments: speakerLines
       ? speakerLines.map((line) => ({ start: line.start, end: line.end, text: line.text, speaker: speakerName(line.speaker) }))
-      : state.segments,
+      : realignSegments(state.segments, text),
     duration: meta.duration,
     fileName: meta.fileName,
     modelName: meta.modelName,

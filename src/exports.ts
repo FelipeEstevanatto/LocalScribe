@@ -65,6 +65,100 @@ function clock(seconds: number, separator: ',' | '.'): string {
   return `${pad(hours)}:${pad(minutes)}:${pad(whole)}${separator}${pad(millis, 3)}`;
 }
 
+const MAX_ALIGN_CELLS = 4_000_000;
+
+/**
+ * Carry edits made in the transcript text box onto the timed segments.
+ *
+ * Words are aligned with a longest-common-subsequence pass after trimming the
+ * shared prefix and suffix, so typical small edits stay cheap even on long
+ * transcripts. Inserted words join the segment of the word before them;
+ * deleted words disappear from their segment. Word timings are dropped from a
+ * segment whose text changed, because they no longer match. When the text is
+ * unchanged the original segments are returned as they are.
+ */
+export function realignSegments(
+  segments: ReadonlyArray<ExportSegment>,
+  editedText: string,
+): ExportSegment[] {
+  const source: Array<{ word: string; segment: number }> = [];
+  segments.forEach((segment, index) => {
+    for (const word of segment.text.split(/\s+/)) if (word) source.push({ word, segment: index });
+  });
+  const edited = editedText.split(/\s+/).filter(Boolean);
+  if (!segments.length) return [];
+  if (source.length === edited.length && source.every((item, i) => item.word === edited[i])) {
+    return segments.map((segment) => ({ ...segment }));
+  }
+
+  // owner[i] = segment index for edited word i.
+  const owner = new Array<number>(edited.length).fill(-1);
+  let head = 0;
+  while (head < source.length && head < edited.length && source[head].word === edited[head]) {
+    owner[head] = source[head].segment;
+    head += 1;
+  }
+  let tailSource = source.length - 1;
+  let tailEdited = edited.length - 1;
+  while (tailSource >= head && tailEdited >= head && source[tailSource].word === edited[tailEdited]) {
+    owner[tailEdited] = source[tailSource].segment;
+    tailSource -= 1;
+    tailEdited -= 1;
+  }
+
+  const rows = tailSource - head + 1;
+  const cols = tailEdited - head + 1;
+  if (rows > 0 && cols > 0 && rows * cols <= MAX_ALIGN_CELLS) {
+    const width = cols + 1;
+    const table = new Uint32Array((rows + 1) * width);
+    for (let r = rows - 1; r >= 0; r -= 1) {
+      for (let c = cols - 1; c >= 0; c -= 1) {
+        table[r * width + c] = source[head + r].word === edited[head + c]
+          ? table[(r + 1) * width + c + 1] + 1
+          : Math.max(table[(r + 1) * width + c], table[r * width + c + 1]);
+      }
+    }
+    let r = 0;
+    let c = 0;
+    while (r < rows && c < cols) {
+      if (source[head + r].word === edited[head + c]) {
+        owner[head + c] = source[head + r].segment;
+        r += 1;
+        c += 1;
+      } else if (table[(r + 1) * width + c] >= table[r * width + c + 1]) {
+        r += 1;
+      } else {
+        c += 1;
+      }
+    }
+  } else if (cols > 0 && rows > 0) {
+    // Too large to align exactly: spread the changed words proportionally.
+    for (let c = 0; c < cols; c += 1) {
+      owner[head + c] = source[head + Math.min(rows - 1, Math.floor((c / cols) * rows))].segment;
+    }
+  }
+
+  // Unmatched (inserted) words follow the previous word, or the next one at the start.
+  let previous = -1;
+  for (let i = 0; i < owner.length; i += 1) {
+    if (owner[i] >= 0) previous = owner[i];
+    else if (previous >= 0) owner[i] = previous;
+  }
+  let next = segments.length - 1;
+  for (let i = owner.length - 1; i >= 0; i -= 1) {
+    if (owner[i] >= 0) next = owner[i];
+    else owner[i] = next;
+  }
+
+  const buckets = segments.map(() => [] as string[]);
+  edited.forEach((word, i) => buckets[Math.max(0, owner[i])].push(word));
+  return segments.map((segment, index) => {
+    const text = buckets[index].join(' ');
+    const changed = text !== segment.text.split(/\s+/).filter(Boolean).join(' ');
+    return changed ? { ...segment, text, words: undefined } : { ...segment };
+  });
+}
+
 function timedSegments(input: ExportInput): ExportSegment[] {
   const segments = input.segments
     .filter((segment) => segment.text.trim().length > 0)
