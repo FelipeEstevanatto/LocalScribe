@@ -7,7 +7,7 @@ audio to a server.
 There is no backend, no account, and no analytics. The audio file never leaves the tab.
 
 - **Selectable speech models** — Fluid Speech, Moonshine, timestamped Whisper, Parakeet Redux, Parakeet Ultra, Phonon-2, Rumble-2-Flash, Qwen3-ASR, Omnilingual ASR, Granite Speech, and Whistle.
-- **A local text-to-speech tab** — four voice engines: tiny-voca (21 MB, two voices, bundled), Kokoro-82M (28 US/UK voices, FP32 or Q8), Underdog Woof (41 MB, two voices, no ONNX), and Reverb-TTS (297M, zero-shot voice cloning in seven languages, WebGPU). Output can be MP3 (default), WAV, OGG, FLAC, M4A, WebM, or Opus.
+- **A local text-to-speech tab** — six voice engines: tiny-voca (21 MB, two voices, bundled), Kokoro-82M (28 US/UK voices, FP32 or Q8), Underdog Woof (41 MB, two voices, no ONNX), Reverb-TTS (297M, zero-shot voice cloning in seven languages, WebGPU), Phonon 31M (streaming English), and Supertonic 3 (31 languages). Output can be MP3 (default), WAV, OGG, FLAC, M4A, WebM, or Opus.
 - **Vision studio** — background removal, depth estimation, object detection, image segmentation, ImageNet classification, and image captioning through Transformers.js.
 - **A proper Model Setup card** — pick a model, choose WebGPU or WASM, load or reload, and watch inline progress with a cancel button. The status dot shows ready, busy, cached, or partial at a glance.
 - **WebGPU first** — the heavy encoders request WebGPU; WASM is the fallback. Granite Speech requires WebGPU.
@@ -150,7 +150,7 @@ For 1440p and 4K sources, **Create preview proxy** builds a 540p or 720p H.264 c
 
 The project menu can **Export .zip** and **Import .zip**: the archive contains `project.json`, every media file, and any proxies, so a project survives clearing site data or moving to another browser profile. **Relink media…** matches replacement files by name when a source disappears.
 
-Export lives in the top-right split button. The menu holds MP4 Standard (best match), 4K, 1080p High Quality, 720p Compact, Vertical 9:16, and Audio Only (WAV); **Custom export…** opens a dialog with platform presets (YouTube, TikTok/Reels, Instagram square, Twitter/X), container, resolution, quality, target size, loudness, exact cuts, and **Entire timeline / Marked In–Out**. Press **I** and **O** on the timeline to mark a range. The language picker now sits in the sidebar.
+Export lives in the top-right split button. The menu holds MP4 Standard (the project resolution, including a custom size), 4K, 1080p High Quality, 720p Compact, Vertical 9:16, and Audio Only (MP3); **Custom export…** opens a dialog with platform presets (YouTube, TikTok/Reels, Instagram square, Twitter/X), container, resolution, quality, target size, loudness, exact cuts, and **Entire timeline / Marked In–Out**. Press **I** and **O** on the timeline to mark a range. The language picker now sits in the sidebar.
 
 On desktop, the editor is a locked workspace rather than a scrolling page: the timeline is docked at the bottom, the library and inspector scroll independently, and the dividers resize the library width, inspector width, and timeline height with the mouse (double-click a divider to reset it). The library can widen to 620px; the media pool switches to a multi-column card grid as it grows. The library and inspector both collapse to slim edge rails.
 
@@ -274,7 +274,7 @@ The app is a static shell with hash routes:
 | `#/transcribe` | Audio to text: input, session strip, transcript, presets, and the batch queue |
 | `#/tts` | Text to speech: voice gallery, generation, exports |
 | `#/audio` | Audio studio: vocal remover, pitch and tempo, cutter, effects, joiner, key and BPM, recorder |
-| `#/video` | Video editor: local projects, free multi-track timeline, filmstrip thumbnails, media pool, split, undo, stacked audio, collapsible inspector, captions, and export |
+| `/video-editor/` (alias `#/video`) | Video editor: local projects, free multi-track timeline, filmstrip thumbnails, media pool, split, undo, stacked audio, collapsible inspector, captions, and export |
 | `#/documents` | OCR and redaction for images/PDFs, plus batch metadata stripping, SHA-256 checksums, renaming, and ZIP packaging |
 | `#/record` | Screen/tab/camera recorder with microphone and system audio, pause/resume, editor handoff, and transcription |
 | `#/queue` | Legacy alias that opens the queue inside Audio to text |
@@ -352,7 +352,7 @@ Granite Speech’s 4-bit `embed_tokens` uses `GatherBlockQuantized`, which ONNX 
 
 ### Text to speech
 
-The **Text to speech** tab has two English models.
+The **Text to speech** tab has six engines. tiny-voca, Kokoro, Underdog Woof and Phonon speak English; Reverb-TTS clones voices in seven languages and Supertonic 3 speaks 31. Markup such as SSML tags is removed before synthesis, and English-only engines refuse text that is mostly in another script.
 
 **tiny-voca** by Muhammed Nazeem:
 
@@ -393,7 +393,7 @@ The format selector defaults to **MP3 · 128 kbps**. WAV is written directly by 
 
 Open an audio or video file, join an ordered list of files, or record from your microphone. The editor supports waveform selection, cuts, independent pitch and tempo controls, EQ, fades, reverb, loudness normalization, and ten export formats. Key and BPM estimates use up to the first minute of each selected file. Tap Tempo works without a file.
 
-HTDemucs splits a track into vocals and accompaniment or into four stems. Preview and save stems individually, adjust their gains for a remix, or open the instrumental as backing for karaoke. Karaoke combines the accompaniment and recorded voice with adjustable level, pitch, and timing. HTDemucs defaults to the 316 MB FP32 weights. The optional 166 MB download stores the weights at FP16 and still runs inference in FP32. Either variant can be cached before opening a file. Audio processing takes place in the browser.
+HTDemucs splits a track into vocals and accompaniment or into four stems. Preview and save stems individually, adjust their gains for a remix, or open the instrumental as backing for karaoke. Karaoke combines the accompaniment and recorded voice with adjustable level, pitch, and timing. HTDemucs defaults to the 166 MB "standard" download, which stores the weights at FP16 and still runs inference in FP32. The 316 MB FP32 weights are available as "full precision". Either variant can be cached before opening a file. Audio processing takes place in the browser.
 
 
 The download button uses the selected extension (`tiny-voca.mp3`, `kokoro.flac`, and so on), and the player previews the encoded file rather than a hidden WAV.
@@ -626,7 +626,7 @@ Why not one giant `ArrayBuffer`? Cached model files are assembled into a `Blob` 
 - No backend, analytics, cookies, font CDN, or runtime CDN.
 - The only external requests are Hugging Face model weights when you choose to download a model, plus links you click.
 - Hugging Face sees normal request metadata (IP address, user agent) when weights are downloaded, but never audio or transcript content.
-- The only local preferences are the selected model/variant and clean-mode toggle in `localStorage`.
+- `localStorage` holds preferences only: model, variant, preset, language, clean mode, history and speaker-detection switches, UI language, sidebar and studio layout, preview compositor, the last video project id, seen tips, AI editor provider settings (never the API key), and the names of running jobs so a reload can report what it interrupted. Transcripts, audio and file contents are never stored there.
 
 ## Browser support and limitations
 
