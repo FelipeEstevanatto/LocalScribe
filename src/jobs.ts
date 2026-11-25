@@ -25,6 +25,7 @@ interface Job {
 /** Jobs shorter than this never appear, so quick actions stay quiet. */
 const SHOW_AFTER_MS = 1200;
 const LINGER_MS = 8000;
+const RUNNING_KEY = 'localscribe.jobs.running';
 
 export function setupJobTray(options: { navigate: (view: string) => void; currentView: () => string; viewTitle: (view: string) => string }) {
   const jobs: Job[] = [];
@@ -53,6 +54,15 @@ export function setupJobTray(options: { navigate: (view: string) => void; curren
   tray.append(head, list);
   document.body.append(tray);
 
+  // Reloading or closing the tab ends every local job: there is no server to
+  // finish it. Ask first whenever any tool still has a job running, not only
+  // transcription.
+  window.addEventListener('beforeunload', (event) => {
+    if (!jobs.some((job) => !job.done)) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+
   function visible(job: Job): boolean {
     return job.done || performance.now() - job.started >= SHOW_AFTER_MS;
   }
@@ -75,6 +85,17 @@ export function setupJobTray(options: { navigate: (view: string) => void; curren
     document.title = running.length
       ? `(${progress.length ? Math.round((progress.reduce((a, b) => a + b, 0) / progress.length) * 100) + '%' : '…'}) ${baseTitle}`
       : baseTitle;
+    rememberRunning();
+  }
+
+  // Remember which jobs are running (labels and tools only), so a reload can
+  // say what it interrupted instead of dropping it silently.
+  function rememberRunning(): void {
+    try {
+      const running = jobs.filter((job) => !job.done).map((job) => ({ label: job.label, view: job.view }));
+      if (running.length) sessionStorage.setItem(RUNNING_KEY, JSON.stringify(running));
+      else sessionStorage.removeItem(RUNNING_KEY);
+    } catch { /* Storage can be unavailable; this is only a courtesy. */ }
   }
 
   function paint(job: Job): void {
@@ -153,6 +174,19 @@ export function setupJobTray(options: { navigate: (view: string) => void; curren
       },
     };
   }
+
+  try {
+    const interrupted = JSON.parse(sessionStorage.getItem(RUNNING_KEY) ?? '[]') as Array<{ label: string; view: string }>;
+    sessionStorage.removeItem(RUNNING_KEY);
+    for (const entry of interrupted.slice(0, 5)) {
+      if (typeof entry?.label !== 'string' || typeof entry.view !== 'string') continue;
+      const handle = start(entry.label, entry.view);
+      // Show it at once: an interrupted job is never "too short to show".
+      const job = jobs[jobs.length - 1];
+      job.started -= SHOW_AFTER_MS;
+      handle.finish('Interrupted when the page reloaded. Start it again.', false);
+    }
+  } catch { /* Ignore unreadable state. */ }
 
   return { start };
 }
