@@ -110,6 +110,8 @@ import {
   type GraphicKind,
   type GraphicPattern,
   type GraphicPatternPreset,
+  safeSvgSource,
+  sanitizeGraphic,
 } from './video-graphics';
 import { overlayTransitionOpacity, type OverlayTransition } from './video-overlays';
 import {
@@ -3593,7 +3595,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
         ...cue,
         style: cue.style ? { ...cue.style } : undefined,
       }));
-      graphics = (data.state.graphics ?? []).map((graphic) => ({ ...graphic }));
+      graphics = (data.state.graphics ?? []).map((graphic) => sanitizeGraphic(graphic));
       cameraCuts = (data.state.cameraCuts ?? []).map((cut) => ({ ...cut }));
       selectedTitle = -1;
       selectedSubtitleKey = '';
@@ -5227,7 +5229,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
       ...cue,
       style: cue.style ? { ...cue.style } : undefined,
     }));
-    graphics = (state.graphics ?? []).map((graphic) => ({ ...graphic }));
+    graphics = (state.graphics ?? []).map((graphic) => sanitizeGraphic(graphic));
     cameraCuts = (state.cameraCuts ?? []).map((cut) => ({ ...cut }));
     normalizeOverlayTracks();
     selectedTitle = -1;
@@ -15671,7 +15673,8 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
       el.style.transform = `translateY(-50%) rotate(${graphic.rotation}deg)`;
     } else if (graphic.kind === 'svg') {
       el.style.height = `${graphic.height}%`;
-      el.style.backgroundImage = graphic.svg ? `url("${graphic.svg}")` : '';
+      const svgSource = safeSvgSource(graphic.svg);
+      el.style.backgroundImage = svgSource ? `url("${svgSource}")` : '';
       el.style.backgroundPosition = 'center';
       el.style.backgroundRepeat = 'no-repeat';
       el.style.backgroundSize = 'contain';

@@ -37,6 +37,39 @@ export interface GraphicClip {
   transition?: OverlayTransition;
 }
 
+const SAFE_COLOR = /^(?:#[0-9a-f]{3,8}|transparent|currentcolor|[a-z]{3,30}|(?:rgb|hsl)a?\([\d\s.,%/+-]*(?:deg)?[\d\s.,%/+-]*\))$/i;
+
+/**
+ * Return an SVG overlay source only when it is an inline data URL. Project
+ * files are untrusted input: any other URL would make the preview or the
+ * exporter fetch an external resource. Quotes, backslashes and line breaks are
+ * percent-encoded so the value cannot escape a CSS `url("...")`.
+ */
+export function safeSvgSource(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!/^data:image\/svg\+xml[;,]/i.test(trimmed)) return undefined;
+  return trimmed.replace(/["\\\r\n]/g, (char) => encodeURIComponent(char));
+}
+
+/** Keep a CSS colour only when it is a plain colour value, never a url() or a list. */
+export function safeCssColor(value: unknown, fallback: string): string {
+  return typeof value === 'string' && SAFE_COLOR.test(value.trim()) ? value.trim() : fallback;
+}
+
+/** Sanitise a graphic restored from a saved or imported project. */
+export function sanitizeGraphic(graphic: GraphicClip): GraphicClip {
+  const next: GraphicClip = {
+    ...graphic,
+    fill: safeCssColor(graphic.fill, 'transparent'),
+    stroke: safeCssColor(graphic.stroke, 'transparent'),
+  };
+  if (graphic.fill2 !== undefined) next.fill2 = safeCssColor(graphic.fill2, '#22d3ee');
+  if (graphic.patternColor !== undefined) next.patternColor = safeCssColor(graphic.patternColor, '#ffffff');
+  if (graphic.svg !== undefined) next.svg = safeSvgSource(graphic.svg);
+  return next;
+}
+
 export function graphicLabel(kind: GraphicKind): string {
   if (kind === 'rect') return 'Rectangle';
   if (kind === 'ellipse') return 'Ellipse';
@@ -455,7 +488,10 @@ export async function preloadGraphicImages(graphics: readonly GraphicClip[]): Pr
   for (const graphic of graphics) {
     if (graphic.kind === 'emoji') emojiSprite(graphic.emoji ?? '🙂');
   }
-  const urls = [...new Set(graphics.flatMap((graphic) => graphic.kind === 'svg' && graphic.svg ? [graphic.svg] : []))];
+  const urls = [...new Set(graphics.flatMap((graphic) => {
+    const src = graphic.kind === 'svg' ? safeSvgSource(graphic.svg) : undefined;
+    return src ? [src] : [];
+  }))];
   await Promise.all(urls.map((src) => loadGraphicImage(src)));
 }
 
@@ -486,7 +522,8 @@ export function drawGraphics(
       ctx.lineTo(w / 2, 0);
       ctx.stroke();
     } else if (graphic.kind === 'svg') {
-      const image = graphic.svg ? graphicImageCache.get(graphic.svg) : null;
+      const src = safeSvgSource(graphic.svg);
+      const image = src ? graphicImageCache.get(src) : null;
       if (image && image.complete && image.naturalWidth > 0) {
         const scale = Math.min(w / image.naturalWidth, h / image.naturalHeight);
         const drawWidth = image.naturalWidth * scale;
