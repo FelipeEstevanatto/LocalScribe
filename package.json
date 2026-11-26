@@ -6,7 +6,7 @@
   "description": "Privacy-first, fully client-side audio transcription, dictation, text to speech, voice cloning, and vision tools with local models, history, exports, a batch queue, offline support, and a privacy receipt.",
   "license": "MIT",
   "engines": {
-    "node": ">=20.19"
+    "bun": ">=1.1.0"
   },
   "scripts": {
     "dev": "vite",
