@@ -385,7 +385,17 @@ export async function processVideo(ffmpeg: AudioFfmpeg, operation: VideoOperatio
     return one(await command(file, [...seek, '-i', src, '-filter_complex', graph, '-map', '[v]', '-an', '-loop', String(options.loop)],
       'clip.gif', 'image/gif'), 'gif');
   }
-  if (operation === 'reverse-video') return one(await reverseVideo(ffmpeg, file, probe, options, run), 'mp4');
+  if (operation === 'reverse-video') {
+    try {
+      const { reverseInBrowser } = await import('./quick-video-browser');
+      const fast = await reverseInBrowser(ffmpeg, file, probe, options, run);
+      if (fast) return one(fast, 'mp4', 'Reversed in the browser.');
+    } catch (error) {
+      run.signal?.throwIfAborted();
+      console.warn('Browser reverse unavailable; using FFmpeg.', error);
+    }
+    return one(await reverseVideo(ffmpeg, file, probe, options, run), 'mp4');
+  }
   const format = operation === 'video-converter' || operation === 'video-trimmer' ? options.format : 'mp4';
   const mime = VIDEO_FORMATS[format].mime;
   const out = 'video.' + format;

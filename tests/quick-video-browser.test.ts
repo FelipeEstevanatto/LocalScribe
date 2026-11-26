@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { retimeSlots } from '../src/quick-video-browser';
+import { retimeSlots, reverseBlockFrames } from '../src/quick-video-browser';
 
 function picked(speed: number, sourceFps: number, outputFps: number, seconds: number): number[][] {
   const total = Math.round((seconds / speed) * outputFps);
@@ -32,5 +32,14 @@ describe('change-speed frame placement', () => {
     expect(slots.every((s) => s.length === 1)).toBe(true);
     const frames = slots.map((s) => s[0]);
     expect(frames.every((f, i) => i === 0 || f > frames[i - 1])).toBe(true);
+  });
+});
+
+describe('reverse block size', () => {
+  test('holds about 256 MB of frames, between 4 and 120', () => {
+    expect(reverseBlockFrames(1280, 720)).toBe(69);
+    expect(reverseBlockFrames(3840, 2160)).toBe(7);
+    expect(reverseBlockFrames(320, 240)).toBe(120);
+    expect(reverseBlockFrames(7680, 4320)).toBe(4);
   });
 });

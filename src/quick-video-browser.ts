@@ -11,7 +11,7 @@
  * sound still goes through FFmpeg's atempo (pitch kept), which is audio-only
  * and quick, and FFmpeg muxes the two without re-encoding.
  */
-import { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Mp4OutputFormat, Output } from 'mediabunny';
+import { ALL_FORMATS, BlobSource, BufferTarget, CanvasSink, CanvasSource, Conversion, Input, Mp4OutputFormat, Output } from 'mediabunny';
 import { audioInputName, type AudioFfmpeg, type MediaProbe } from './audio-ffmpeg';
 import { fitVideo, seconds, tempoFilters, type QuickVideoRun, type VideoOptions } from './quick-video';
 
@@ -134,4 +134,97 @@ export async function changeSpeedInBrowser(
   return ffmpeg.run([video, audio], ['-i', audioInputName(0), '-i', audioInputName(1), '-map', '0:v:0', '-map', '1:a:0',
     '-c', 'copy', '-shortest', '-movflags', '+faststart', 'video.mp4'],
   'video.mp4', 'video/mp4', { ...run, duration: outputDuration, onProgress: undefined });
+}
+
+/** Frames held per block while reversing: about 256 MB of RGBA at output size. */
+export function reverseBlockFrames(width: number, height: number): number {
+  return Math.max(4, Math.min(120, Math.floor(256_000_000 / (width * height * 4))));
+}
+
+/**
+ * Reverse with the browser decoder and encoder. The source is decoded in
+ * blocks from the end (frames kept at output size), each block is written in
+ * reverse order, and the sound (original or reversed, with the speed) comes
+ * from FFmpeg's audio-only filters. FFmpeg WASM reversed and concatenated
+ * re-encoded blocks on the CPU, which did not finish 5 minutes in 300 s.
+ * Returns null when the browser or file cannot take this path.
+ */
+export async function reverseInBrowser(
+  ffmpeg: AudioFfmpeg,
+  file: File,
+  probe: MediaProbe,
+  options: VideoOptions,
+  run: QuickVideoRun,
+): Promise<Blob | null> {
+  if (typeof VideoEncoder === 'undefined' || typeof VideoDecoder === 'undefined' || typeof OffscreenCanvas === 'undefined') return null;
+  const speed = options.speed;
+  if (!Number.isFinite(speed) || speed < 0.1 || speed > 16) return null;
+  const { start, end } = options.range;
+  const span = end - start;
+  const outputDuration = span / speed;
+  const fps = options.fps || Math.min(30, probe.fps || 30);
+  const total = Math.max(1, Math.ceil(outputDuration * fps - 1e-7));
+  const withAudio = probe.hasAudio && options.audio !== 'mute';
+  const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+  let video: Blob | null = null;
+  try {
+    const track = await input.getPrimaryVideoTrack();
+    if (!track || !(await track.canDecode())) return null;
+    const { width, height } = fitVideo(probe, options.resolution);
+    const sink = new CanvasSink(track, { width, height, fit: 'contain' });
+    const canvas = new OffscreenCanvas(width, height);
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    const target = new BufferTarget();
+    const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
+    const source = new CanvasSource(canvas, {
+      codec: 'avc',
+      bitrate: bitrateFor(width, height, fps, options.quality),
+      keyFrameInterval: 2,
+      hardwareAcceleration: 'prefer-hardware',
+    });
+    output.addVideoTrack(source, { frameRate: fps });
+    await output.start();
+    const block = reverseBlockFrames(width, height);
+    // Forward output frame j shows source time start + j * speed / fps; the
+    // reversed file shows them from j = total - 1 down to 0. The small offset
+    // keeps a time that lands on a frame boundary on that frame.
+    let written = 0;
+    for (let last = total; last > 0;) {
+      run.signal?.throwIfAborted();
+      const first = Math.max(0, last - block);
+      const times: number[] = [];
+      for (let j = first; j < last; j += 1) times.push(Math.min(end - 1e-4, start + (j * speed) / fps + 1e-4));
+      const frames: (ImageBitmap | null)[] = [];
+      for await (const wrapped of sink.canvasesAtTimestamps(times)) {
+        frames.push(wrapped ? await createImageBitmap(wrapped.canvas) : null);
+      }
+      for (let index = frames.length - 1; index >= 0; index -= 1) {
+        const frame = frames[index] ?? frames.find(Boolean) ?? null;
+        context.fillStyle = '#000';
+        context.fillRect(0, 0, width, height);
+        if (frame) context.drawImage(frame, 0, 0, width, height);
+        await source.add(written / fps, 1 / fps);
+        written += 1;
+      }
+      for (const frame of frames) frame?.close();
+      run.onProgress?.({ ratio: (withAudio ? 0.9 : 1) * (written / total), time: written / fps });
+      last = first;
+    }
+    await output.finalize();
+    if (target.buffer) video = new Blob([target.buffer], { type: 'video/mp4' });
+  } finally {
+    input.dispose();
+  }
+  if (!video) return null;
+  if (!withAudio) return video;
+  const full = start === 0 && Math.abs(end - probe.duration) <= 0.005;
+  const seek = [...(start > 0 ? ['-ss', seconds(start)] : []), ...(!full ? ['-t', seconds(span)] : [])];
+  const filters = ['asetpts=PTS-STARTPTS', ...(options.audio === 'reverse' ? ['areverse'] : []), ...tempoFilters(speed)];
+  const audio = await ffmpeg.run(file, [...seek, '-i', 'input.media', '-map', '0:a:0', '-vn', '-af', filters.join(','),
+    '-c:a', 'aac', '-b:a', '128k', 'audio.m4a'], 'audio.m4a', 'audio/mp4', { ...run, duration: outputDuration, onProgress: undefined });
+  run.signal?.throwIfAborted();
+  return ffmpeg.run([video, audio], ['-i', audioInputName(0), '-i', audioInputName(1), '-map', '0:v:0', '-map', '1:a:0',
+    '-c', 'copy', '-shortest', '-movflags', '+faststart', 'reverse.mp4'],
+  'reverse.mp4', 'video/mp4', { ...run, duration: outputDuration, onProgress: undefined });
 }
