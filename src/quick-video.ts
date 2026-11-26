@@ -409,6 +409,19 @@ export async function processVideo(ffmpeg: AudioFfmpeg, operation: VideoOperatio
     }
   }
   const angle = options.rotation;
+  if (operation === 'rotate-video' && options.copy && (angle === 90 || angle === 180 || angle === 270) &&
+    !options.flipX && !options.flipY && /\.(mp4|m4v|mov)$/i.test(file.name) && (format === 'mp4' || format === 'mov' || format === 'm4v')) {
+    // Rewrite only the display matrix; the packets are copied unchanged.
+    try {
+      const { rotateByMetadata } = await import('./video-rotate');
+      const rotated = await rotateByMetadata(file, angle, format === 'mov' ? 'mov' : 'mp4', run.signal,
+        (ratio) => run.onProgress?.({ ratio, time: ratio * duration }));
+      if (rotated) return one(new Blob([rotated], { type: mime }), format, 'Rotation metadata updated.');
+    } catch (error) {
+      run.signal?.throwIfAborted();
+      console.warn('Rotation by remux unavailable; using FFmpeg.', error);
+    }
+  }
   if (operation === 'rotate-video' && options.copy && angle && !options.flipX && !options.flipY && /\.mp4$/i.test(file.name)) {
     // Depending on the compiled FFmpeg version, assigning rotation metadata
     // to stream copy is handled through the MOV muxer's rotate tag.
