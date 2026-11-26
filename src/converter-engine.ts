@@ -21,6 +21,7 @@ import {
 } from './converter-catalog';
 import type { PdfPageImage } from './pdf-doc';
 import { audioArgs, videoArgs } from './converter-media';
+import { canConvertInBrowser, convertVideoInBrowser } from './converter-video';
 import { canvasFor, decodeImage, toBlob } from './quick-canvas';
 
 export interface ConversionProgress {
@@ -58,6 +59,17 @@ async function convertMedia(
   const audio = category === 'audio';
   const stage = audio ? 'Encoding audio' : 'Encoding video';
   onProgress?.({ ratio: 0.05, stage: 'Preparing media' });
+  if (!audio && canConvertInBrowser(file.name, target, settings.video)) {
+    try {
+      const converted = await convertVideoInBrowser(file, target, settings.video, signal, (ratio) => {
+        onProgress?.({ ratio: 0.05 + 0.9 * Math.max(0, Math.min(1, ratio)), stage });
+      });
+      if (converted) return { blob: new Blob([converted.blob], { type: mime }), name: nameWithoutExt(file.name) + '.' + ext, mime };
+    } catch (error) {
+      signal?.throwIfAborted();
+      console.warn('Browser video conversion unavailable; using FFmpeg.', error);
+    }
+  }
   const ffmpeg = converterFfmpeg;
   const probe = await runFfmpeg(() => ffmpeg.probe(file, signal), signal);
   if (audio ? !probe.hasAudio : !probe.hasVideo) throw new Error(audio ? 'This file has no audio track.' : 'This file has no video track.');
