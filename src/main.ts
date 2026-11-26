@@ -4471,15 +4471,18 @@ function updateSegmentRow(index: number): void {
 
 function highlightSegmentAtTime(): void {
   const time = els.audioPlayer.currentTime || 0;
-  const rows = els.segmentList.querySelectorAll<HTMLElement>('[data-segment-index]');
-
-  rows.forEach((row) => {
-    const segment = state.segments[Number(row.dataset.segmentIndex)];
-    const active = Boolean(
-      segment && time >= segment.start && time < segment.end + 0.05,
-    );
-    row.classList.toggle('segment-active', active);
+  // Only the highlighted rows change; scanning the segment array is cheap,
+  // touching every row's classList on each timeupdate was not.
+  const active = new Set<number>();
+  state.segments.forEach((segment, index) => {
+    if (time >= segment.start && time < segment.end + 0.05) active.add(index);
   });
+  for (const row of els.segmentList.querySelectorAll<HTMLElement>('.segment-active[data-segment-index]')) {
+    if (!active.has(Number(row.dataset.segmentIndex))) row.classList.remove('segment-active');
+  }
+  for (const index of active) {
+    els.segmentList.querySelector<HTMLElement>(`[data-segment-index="${index}"]`)?.classList.add('segment-active');
+  }
 }
 
 function scheduleWaveformDraw(): void {
@@ -5012,6 +5015,11 @@ async function transcribe(): Promise<'done' | 'empty' | 'cancelled' | 'failed' |
     renderSegments();
 
     let lastPartialUi = 0;
+    // Segments fill in order, so the transcript is the finished segments plus
+    // the one in progress. Keep the finished part instead of re-joining every
+    // segment on each update (O(n²) over a long file).
+    let finishedText = '';
+    const joinText = (head: string, tail: string): string => (head && tail ? `${head} ${tail}` : head || tail);
     for (let index = 0; index < chunks.length; index += 1) {
       if (signal.aborted) throw new DOMException('Transcription cancelled.', 'AbortError');
 
@@ -5034,10 +5042,7 @@ async function transcribe(): Promise<'done' | 'empty' | 'cancelled' | 'failed' |
           const now = performance.now();
           if (now - lastPartialUi >= 150) {
             lastPartialUi = now;
-            els.transcript.value = state.segments
-              .map((entry) => entry.text)
-              .filter(Boolean)
-              .join(' ');
+            els.transcript.value = joinText(finishedText, segment.text);
             updateCounts();
             updateTranscriptButtons();
           }
@@ -5067,13 +5072,13 @@ async function transcribe(): Promise<'done' | 'empty' | 'cancelled' | 'failed' |
         });
       }
 
-      els.transcript.value = state.segments
-        .map((entry) => entry.text)
-        .filter(Boolean)
-        .join(' ');
+      finishedText = joinText(finishedText, segment?.text ?? '');
+      els.transcript.value = finishedText;
       updateCounts();
       updateTranscriptButtons();
-      renderSegments();
+      // The rows already exist; patch this one instead of rebuilding the list.
+      updateSegmentRow(index);
+      highlightSegmentAtTime();
       updateInference(index + 1, chunks.length, 0, `Segment ${index + 1} of ${chunks.length} complete`);
     }
 
