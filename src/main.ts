@@ -2427,8 +2427,15 @@ function cancelRecording(): void {
  */
 function modelRunsOnCpu(model = currentModel()): boolean {
   if (model.pipeline === 'granite-speech') return false;
-  return state.forceCpu || !state.webgpu.supported;
+  if (state.forceCpu || !state.webgpu.supported || WASM_ONLY_PIPELINES.has(model.pipeline)) return true;
+  // A per-model default until the user picks a device in this session.
+  return !deviceChosen && model.preferCpu === true;
 }
+
+/** Pipelines whose engine always runs ONNX Runtime on WASM (transformers-asr.ts). */
+const WASM_ONLY_PIPELINES = new Set<string>(['moonshine', 'whisper']);
+/** True once the user picked WebGPU or CPU; model defaults stop applying. */
+let deviceChosen = false;
 
 function renderQueueSettings(): void {
   const model = currentModel();
@@ -3028,8 +3035,11 @@ function renderSession(): void {
 
   const webgpuAvailable = state.webgpu.supported;
   const webgpuOnly = currentModel().pipeline === 'granite-speech';
+  const wasmOnly = WASM_ONLY_PIPELINES.has(currentModel().pipeline);
   const onCpu = modelRunsOnCpu();
-  els.deviceWebgpu.disabled = state.busy !== 'idle' || !webgpuAvailable;
+  // Moonshine and Whisper always run on WASM; do not show WebGPU as active.
+  els.deviceWebgpu.disabled = state.busy !== 'idle' || !webgpuAvailable || wasmOnly;
+  els.deviceWebgpu.title = wasmOnly ? 'This model runs on the CPU (WASM) only.' : '';
   // A WebGPU-only model cannot run on the CPU, so the toggle shows WebGPU
   // as the active device and explains why CPU is unavailable.
   els.deviceCpu.disabled = state.busy !== 'idle' || webgpuOnly;
@@ -4615,7 +4625,7 @@ async function ensureEngine(signal: AbortSignal): Promise<AsrClient> {
   const model = currentModel();
   const variant = currentVariant();
   const clean = currentClean();
-  const forceCpu = state.forceCpu && model.pipeline !== 'granite-speech';
+  const forceCpu = modelRunsOnCpu(model);
   const wantWebgpu = gpu.supported && !forceCpu;
 
   if (state.engine && forceCpu && state.engine.backend === 'webgpu') {
@@ -4719,7 +4729,9 @@ function setInferenceDevice(cpu: boolean): void {
     return;
   }
 
-  if (state.forceCpu === cpu) {
+  const wasOnCpu = modelRunsOnCpu();
+  deviceChosen = true;
+  if (state.forceCpu === cpu && wasOnCpu === modelRunsOnCpu()) {
     renderSession();
     return;
   }

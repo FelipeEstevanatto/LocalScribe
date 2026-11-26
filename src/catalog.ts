@@ -131,6 +131,12 @@ export interface SupportedModel {
   recommended?: boolean;
   /** Short, job-shaped label shown on the model card. */
   bestFor: string;
+  /**
+   * Run on WASM unless the user picks WebGPU. Set where the CPU build is the
+   * faster default (fluid-mini: 39 s vs 53 s for 5 min on an RTX 3060 Ti; its
+   * TDT decode loop is many small kernels).
+   */
+  preferCpu?: boolean;
   /** Audio is split near this many seconds before inference. Default 30. */
   chunkSeconds?: number;
   defaultVariant: string;
@@ -609,6 +615,7 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     name: 'Fluid Speech Mini',
     family: 'Parakeet TDT · split frontend/encoder/decoder/joint',
     pipeline: 'fluid-mini-tdt',
+    preferCpu: true,
     repo: MINI_REPO,
     revision: MINI_REVISION,
     description:
