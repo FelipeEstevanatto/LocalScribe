@@ -3,6 +3,9 @@
  * interface, instead of a branch per engine in main.ts.
  */
 
+import { getOrt } from './ort-runtime';
+import { fetchWithProgress } from './transfer';
+
 export interface PluginVoice {
   id: string;
   /** Option label: "Title · details". */
@@ -235,7 +238,7 @@ export function supertonicChunks(text: string, language: string): string[] {
   return chunks;
 }
 
-type OrtModule = Awaited<ReturnType<typeof import('./ort-runtime').getOrt>>;
+type OrtModule = Awaited<ReturnType<typeof getOrt>>;
 type OrtSession = Awaited<ReturnType<OrtModule['InferenceSession']['create']>>;
 type OrtTensor = InstanceType<OrtModule['Tensor']>;
 type SupertonicStyle = { ttl: OrtTensor; dp: OrtTensor };
@@ -249,7 +252,6 @@ async function supertonicFetch(file: string, expected: number, onBytes: (loaded:
     onBytes(bytes.byteLength);
     return bytes;
   }
-  const { fetchWithProgress } = await import('./transfer');
   const bytes = await fetchWithProgress(url, (loaded) => onBytes(loaded), { signal, expectedBytes: expected });
   await cache?.put(url, new Response(bytes)).catch(() => undefined);
   return bytes;
@@ -312,7 +314,6 @@ export class SupertonicPlugin implements TtsPlugin {
       };
       const indexerBytes = await supertonicFetch(SUPERTONIC_INDEXER.file, SUPERTONIC_INDEXER.bytes, report(SUPERTONIC_INDEXER.file), signal);
       this.indexer = JSON.parse(new TextDecoder().decode(indexerBytes)) as number[];
-      const { getOrt } = await import('./ort-runtime');
       // Fetch and start one graph at a time so only one buffer is alive; on
       // a WebGPU retry the graphs come back from the Cache API.
       const create = async (backend: 'webgpu' | 'wasm') => {

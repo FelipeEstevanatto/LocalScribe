@@ -93,6 +93,7 @@ import {
   type ClipEffects,
 } from './video-effects';
 import { runPixelPassParallel } from './pixel-effects-pool';
+import { sharedMedia } from './media-router';
 
 export interface ExportVideoClip extends MergeVideo {
   blob: Blob;
@@ -508,7 +509,6 @@ async function renderBrowserSoundtrack(
   }
   if (!sampleRate || !channelCount) return null;
   const wav = writeFloatWav(channels.map((chunks) => concatFloat32(chunks)), sampleRate);
-  const { sharedMedia } = await import('./media-router');
   const encoded = await sharedMedia().encode(wav, 'm4a', {
     signal,
     onProgress: ({ ratio }) => onProgress?.(0.6 + (ratio ?? 0) * 0.4, 'Encoding the soundtrack'),

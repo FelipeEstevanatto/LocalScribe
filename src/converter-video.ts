@@ -7,6 +7,7 @@
  * caller uses FFmpeg as before.
  */
 import type { VideoSettings } from './converter-catalog';
+import { sharedMedia } from './media-router';
 import { MERGE_FORMATS, type MergeFormat, type MergeSettings } from './video-merge-args';
 
 const BROWSER_SOURCES = /\.(mp4|m4v|mov|webm|mkv)$/i;
@@ -47,7 +48,6 @@ export async function convertVideoInBrowser(
   if (!canConvertInBrowser(file.name, target, settings) || !isBrowserVideoTarget(target)) return null;
   const { exportVideo, webCodecsSupported } = await import('./video-export');
   if (!webCodecsSupported()) return null;
-  const { sharedMedia } = await import('./media-router');
   const router = sharedMedia();
   const probe = await router.probe(file, signal);
   if (router.lastEngine === 'ffmpeg' || !probe.hasVideo || !probe.width || !probe.height || !(probe.duration > 0)) return null;

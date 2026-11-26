@@ -3,7 +3,7 @@
  * (MD5, CRC32 and Adler32 are plain loops). The Blob is passed by reference,
  * so the bytes are read in the worker. Falls back to the page without workers.
  */
-import type { FileChecksums } from './file-metadata';
+import { checksumsFor, type FileChecksums } from './file-metadata';
 
 let worker: Worker | null = null;
 let nextId = 0;
@@ -32,7 +32,7 @@ function checksumWorker(): Worker {
 }
 
 export async function checksumsOffThread(file: Blob): Promise<FileChecksums | null> {
-  if (typeof Worker === 'undefined') return (await import('./file-metadata')).checksumsFor(file);
+  if (typeof Worker === 'undefined') return checksumsFor(file);
   const target = checksumWorker();
   const id = ++nextId;
   return new Promise((resolve, reject) => {

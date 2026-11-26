@@ -5,6 +5,8 @@
  * instance, so speech and vision models can stay loaded together.
  */
 
+import { fetchWithProgress } from './transfer';
+
 /** Pinned runtime release and model revisions. */
 const CACTUS_REPO = 'https://huggingface.co/Cactus-Compute/cactus/resolve/f4ab2741203a282c6e7b89983de2b5e5b2e805a8/releases/4.1.4/wasm/';
 export const CACTUS_SCRIPT_URL = `${CACTUS_REPO}cactus.js`;
@@ -150,7 +152,6 @@ export async function cactusFetch(url: string, expected: number, onBytes: (loade
     onBytes(bytes.byteLength);
     return bytes;
   }
-  const { fetchWithProgress } = await import('./transfer');
   const bytes = await fetchWithProgress(url, (loaded) => onBytes(loaded), { signal, expectedBytes: expected });
   await cache?.put(url, new Response(bytes)).catch(() => undefined);
   return bytes;
