@@ -1,0 +1,711 @@
+{
+  "capturedAt": "2026-11-23T02:46:00.000Z",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+  "viewport": {
+    "width": 2042,
+    "height": 1058,
+    "dpr": 1.25
+  },
+  "output": {
+    "width": 1280,
+    "height": 720
+  },
+  "webgl": {
+    "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti (0x00002489) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "results": {
+      "identity": {
+        "count": 120,
+        "p50": 0.33,
+        "p95": 0.69,
+        "p99": 1.03,
+        "mean": 0.37,
+        "max": 1.28
+      },
+      "colour": {
+        "count": 120,
+        "p50": 0.32,
+        "p95": 0.5,
+        "p99": 0.85,
+        "mean": 0.35,
+        "max": 1.05
+      },
+      "blur": {
+        "count": 120,
+        "p50": 0.67,
+        "p95": 1.3,
+        "p99": 1.54,
+        "mean": 0.74,
+        "max": 1.57
+      },
+      "chroma-tone-lut": {
+        "count": 120,
+        "p50": 0.33,
+        "p95": 0.64,
+        "p99": 0.98,
+        "mean": 0.37,
+        "max": 1.02
+      },
+      "mask-feather": {
+        "count": 120,
+        "p50": 1.36,
+        "p95": 2.38,
+        "p99": 2.59,
+        "mean": 1.5,
+        "max": 2.66
+      },
+      "everything": {
+        "count": 120,
+        "p50": 1.59,
+        "p95": 3.73,
+        "p99": 6.12,
+        "mean": 2.21,
+        "max": 36.76
+      }
+    }
+  },
+  "webgpu": {
+    "renderer": "webgpu",
+    "results": {
+      "identity": {
+        "count": 120,
+        "p50": 3.03,
+        "p95": 4.01,
+        "p99": 4.48,
+        "mean": 2.99,
+        "max": 5.11
+      },
+      "colour": {
+        "count": 120,
+        "p50": 3.14,
+        "p95": 4.29,
+        "p99": 4.75,
+        "mean": 3.1,
+        "max": 4.82
+      },
+      "blur": {
+        "count": 120,
+        "p50": 3.13,
+        "p95": 4.45,
+        "p99": 4.6,
+        "mean": 3.17,
+        "max": 5.12
+      },
+      "chroma-tone-lut": {
+        "count": 120,
+        "p50": 3.13,
+        "p95": 4.33,
+        "p99": 4.87,
+        "mean": 3.07,
+        "max": 5.13
+      },
+      "mask-feather": {
+        "count": 120,
+        "p50": 3.47,
+        "p95": 4.61,
+        "p99": 4.85,
+        "mean": 3.49,
+        "max": 5.06
+      },
+      "everything": {
+        "count": 120,
+        "p50": 3.22,
+        "p95": 4.81,
+        "p99": 5.33,
+        "mean": 3.44,
+        "max": 5.52
+      }
+    }
+  },
+  "canvas2d": {
+    "colour": {
+      "count": 10,
+      "p50": 17.93,
+      "p95": 46.67,
+      "p99": 46.67,
+      "mean": 20.89,
+      "max": 46.67
+    },
+    "blur": {
+      "count": 10,
+      "p50": 12.13,
+      "p95": 14.31,
+      "p99": 14.31,
+      "mean": 11.73,
+      "max": 14.31
+    },
+    "chroma-tone-lut": {
+      "count": 10,
+      "p50": 88.2,
+      "p95": 104.83,
+      "p99": 104.83,
+      "mean": 87.95,
+      "max": 104.83
+    },
+    "everything": {
+      "count": 10,
+      "p50": 116.8,
+      "p95": 146.21,
+      "p99": 146.21,
+      "mean": 118.11,
+      "max": 146.21
+    }
+  },
+  "highResolution": {
+    "output": {
+      "width": 1920,
+      "height": 1080
+    },
+    "webgl": {
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti (0x00002489) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "results": {
+        "identity": {
+          "count": 60,
+          "p50": 1.05,
+          "p95": 5.86,
+          "p99": 7.38,
+          "mean": 1.62,
+          "max": 7.38
+        },
+        "colour": {
+          "count": 60,
+          "p50": 1,
+          "p95": 2.05,
+          "p99": 3.25,
+          "mean": 1.11,
+          "max": 3.25
+        },
+        "blur": {
+          "count": 60,
+          "p50": 2.06,
+          "p95": 6.22,
+          "p99": 10.34,
+          "mean": 2.71,
+          "max": 10.34
+        },
+        "chroma-tone-lut": {
+          "count": 60,
+          "p50": 0.39,
+          "p95": 0.8,
+          "p99": 1.11,
+          "mean": 0.45,
+          "max": 1.11
+        },
+        "mask-feather": {
+          "count": 60,
+          "p50": 2.52,
+          "p95": 3.71,
+          "p99": 4.97,
+          "mean": 2.73,
+          "max": 4.97
+        },
+        "everything": {
+          "count": 60,
+          "p50": 2.83,
+          "p95": 4.08,
+          "p99": 4.21,
+          "mean": 3.07,
+          "max": 4.21
+        }
+      }
+    },
+    "webgpu": {
+      "renderer": "webgpu",
+      "results": {
+        "identity": {
+          "count": 60,
+          "p50": 3.04,
+          "p95": 4.52,
+          "p99": 4.69,
+          "mean": 3.27,
+          "max": 4.69
+        },
+        "colour": {
+          "count": 60,
+          "p50": 3.09,
+          "p95": 4.42,
+          "p99": 10.26,
+          "mean": 3.38,
+          "max": 10.26
+        },
+        "blur": {
+          "count": 60,
+          "p50": 3.36,
+          "p95": 12.41,
+          "p99": 13.69,
+          "mean": 3.95,
+          "max": 13.69
+        },
+        "chroma-tone-lut": {
+          "count": 60,
+          "p50": 2.88,
+          "p95": 7.32,
+          "p99": 12.28,
+          "mean": 3.12,
+          "max": 12.28
+        },
+        "mask-feather": {
+          "count": 60,
+          "p50": 3.53,
+          "p95": 5.13,
+          "p99": 56.87,
+          "mean": 4.59,
+          "max": 56.87
+        },
+        "everything": {
+          "count": 60,
+          "p50": 4.02,
+          "p95": 5.98,
+          "p99": 6.19,
+          "mean": 4.22,
+          "max": 6.19
+        }
+      }
+    },
+    "canvas2d": {
+      "colour": {
+        "count": 4,
+        "p50": 35.97,
+        "p95": 35.99,
+        "p99": 35.99,
+        "mean": 33.68,
+        "max": 35.99
+      },
+      "blur": {
+        "count": 4,
+        "p50": 25.45,
+        "p95": 25.54,
+        "p99": 25.54,
+        "mean": 24.47,
+        "max": 25.54
+      },
+      "chroma-tone-lut": {
+        "count": 4,
+        "p50": 191.5,
+        "p95": 192.16,
+        "p99": 192.16,
+        "mean": 188.85,
+        "max": 192.16
+      },
+      "everything": {
+        "count": 4,
+        "p50": 273.14,
+        "p95": 276.7,
+        "p99": 276.7,
+        "mean": 261.15,
+        "max": 276.7
+      }
+    }
+  },
+  "source4kAt720p": {
+    "capturedAt": "2026-11-23T04:20:00.000Z",
+    "source": {
+      "width": 3840,
+      "height": 2160,
+      "video": "/bench/preview-4k.mp4",
+      "proxy": "/bench/preview-4k-proxy.mp4"
+    },
+    "preview": {
+      "width": 1280,
+      "height": 720
+    },
+    "capture": "No-trace, no-timer-query run for frame intervals/drops; WebGL timer and paint/raster traces captured in a separate instrumented run. Uploads are downscaled to the 720p preview before texture upload, and visual plans are deduplicated so the 30 fps source is not re-rendered at 165 Hz.",
+    "gate": {
+      "droppedFrameThresholdMs": 16.7,
+      "droppedFrames60": {
+        "simple": {
+          "css": 0,
+          "webgl": 0,
+          "webgpu": 0
+        },
+        "heavy": {
+          "css": 0,
+          "webgl": 0,
+          "webgpu": 0
+        }
+      },
+      "result": "No 60 fps drops on any backend; the stricter 165 Hz miss counts are retained as diagnostics."
+    },
+    "gpuTimer": {
+      "backend": "webgl",
+      "extension": "EXT_disjoint_timer_query_webgl2",
+      "note": "Instrumented run; includes 4K source read/downscale and GPU passes.",
+      "simple": {
+        "p50": 1.77,
+        "p95": 8.99,
+        "p99": 12.4,
+        "mean": 3.41,
+        "max": 14.86
+      },
+      "heavy": {
+        "p50": 3.08,
+        "p95": 9.32,
+        "p99": 13.14,
+        "mean": 4.06,
+        "max": 15.7
+      }
+    },
+    "cases": {
+      "simple": {
+        "css": {
+          "frameIntervals": {
+            "count": 473,
+            "p50": 6.1,
+            "p95": 6.2,
+            "p99": 12,
+            "mean": 6.13,
+            "max": 12.1
+          },
+          "droppedFrames": 5,
+          "droppedRatio": 0.011,
+          "droppedFrames60": 0,
+          "droppedRatio60": 0,
+          "trace": {
+            "paint": {
+              "count": 947,
+              "totalMs": 23.172,
+              "p50": 0.022,
+              "p95": 0.051,
+              "max": 0.112
+            },
+            "raster": {
+              "count": 16,
+              "totalMs": 0.594,
+              "p50": 0.036,
+              "p95": 0.059,
+              "max": 0.059
+            },
+            "animationFrame": {
+              "count": 473,
+              "totalMs": 67.613,
+              "p50": 0.137,
+              "p95": 0.204,
+              "max": 0.909
+            },
+            "commit": {
+              "count": 487,
+              "totalMs": 37.482,
+              "p50": 0.073,
+              "p95": 0.107,
+              "max": 0.263
+            },
+            "longTasks": 0
+          }
+        },
+        "webgl": {
+          "frameIntervals": {
+            "count": 478,
+            "p50": 6.1,
+            "p95": 6.2,
+            "p99": 12.1,
+            "mean": 6.14,
+            "max": 12.2
+          },
+          "droppedFrames": 10,
+          "droppedRatio": 0.021,
+          "renderP50": 0.3,
+          "renderP95": 0.4,
+          "renderP99": 0.5,
+          "renderMean": 0.3,
+          "droppedFrames60": 0,
+          "droppedRatio60": 0,
+          "renderTimes": {
+            "count": 79,
+            "p50": 0.3,
+            "p95": 0.4,
+            "p99": 0.5,
+            "mean": 0.3
+          },
+          "trace": {
+            "paint": {
+              "count": 10,
+              "totalMs": 0.228,
+              "p50": 0.023,
+              "p95": 0.046,
+              "max": 0.046
+            },
+            "raster": {
+              "count": 4,
+              "totalMs": 0.234,
+              "p50": 0.075,
+              "p95": 0.126,
+              "max": 0.126
+            },
+            "animationFrame": {
+              "count": 495,
+              "totalMs": 156.413,
+              "p50": 0.275,
+              "p95": 0.473,
+              "max": 11.472
+            },
+            "commit": {
+              "count": 496,
+              "totalMs": 27.641,
+              "p50": 0.053,
+              "p95": 0.074,
+              "max": 0.23
+            },
+            "longTasks": 2
+          }
+        },
+        "webgpu": {
+          "frameIntervals": {
+            "count": 443,
+            "p50": 6.1,
+            "p95": 6.2,
+            "p99": 11.5,
+            "mean": 6.12,
+            "max": 12.3
+          },
+          "droppedFrames": 6,
+          "droppedRatio": 0.014,
+          "renderP50": 0.3,
+          "renderP95": 0.6,
+          "renderP99": 0.9,
+          "renderMean": 0.38,
+          "droppedFrames60": 0,
+          "droppedRatio60": 0,
+          "renderTimes": {
+            "count": 72,
+            "p50": 0.3,
+            "p95": 0.6,
+            "p99": 0.9,
+            "mean": 0.38
+          },
+          "trace": {
+            "paint": {
+              "count": 14,
+              "totalMs": 0.359,
+              "p50": 0.028,
+              "p95": 0.061,
+              "max": 0.061
+            },
+            "raster": {
+              "count": 4,
+              "totalMs": 0.16,
+              "p50": 0.014,
+              "p95": 0.126,
+              "max": 0.126
+            },
+            "animationFrame": {
+              "count": 412,
+              "totalMs": 189.734,
+              "p50": 0.441,
+              "p95": 0.615,
+              "max": 3.332
+            },
+            "commit": {
+              "count": 413,
+              "totalMs": 23.81,
+              "p50": 0.056,
+              "p95": 0.076,
+              "max": 0.141
+            },
+            "longTasks": 4
+          }
+        }
+      },
+      "heavy": {
+        "css": {
+          "frameIntervals": {
+            "count": 471,
+            "p50": 6.1,
+            "p95": 6.2,
+            "p99": 11.7,
+            "mean": 6.11,
+            "max": 12.2
+          },
+          "droppedFrames": 9,
+          "droppedRatio": 0.019,
+          "droppedFrames60": 0,
+          "droppedRatio60": 0,
+          "trace": {
+            "paint": {
+              "count": 994,
+              "totalMs": 25.641,
+              "p50": 0.023,
+              "p95": 0.049,
+              "max": 0.346
+            },
+            "raster": {
+              "count": 1482,
+              "totalMs": 23.905,
+              "p50": 0.011,
+              "p95": 0.027,
+              "max": 0.89
+            },
+            "animationFrame": {
+              "count": 497,
+              "totalMs": 58.626,
+              "p50": 0.109,
+              "p95": 0.162,
+              "max": 0.748
+            },
+            "commit": {
+              "count": 497,
+              "totalMs": 40.838,
+              "p50": 0.071,
+              "p95": 0.163,
+              "max": 0.391
+            },
+            "longTasks": 0
+          }
+        },
+        "webgl": {
+          "frameIntervals": {
+            "count": 483,
+            "p50": 6.1,
+            "p95": 6.2,
+            "p99": 9.5,
+            "mean": 6.07,
+            "max": 12.2
+          },
+          "droppedFrames": 5,
+          "droppedRatio": 0.01,
+          "renderP50": 0.3,
+          "renderP95": 0.5,
+          "renderP99": 0.6,
+          "renderMean": 0.3,
+          "droppedFrames60": 0,
+          "droppedRatio60": 0,
+          "renderTimes": {
+            "count": 79,
+            "p50": 0.3,
+            "p95": 0.5,
+            "p99": 0.6,
+            "mean": 0.3
+          },
+          "trace": {
+            "paint": {
+              "count": 10,
+              "totalMs": 0.195,
+              "p50": 0.021,
+              "p95": 0.047,
+              "max": 0.047
+            },
+            "raster": {
+              "count": 4,
+              "totalMs": 0.389,
+              "p50": 0.016,
+              "p95": 0.354,
+              "max": 0.354
+            },
+            "animationFrame": {
+              "count": 493,
+              "totalMs": 165.94,
+              "p50": 0.296,
+              "p95": 0.48,
+              "max": 8.567
+            },
+            "commit": {
+              "count": 494,
+              "totalMs": 27.997,
+              "p50": 0.054,
+              "p95": 0.074,
+              "max": 0.45
+            },
+            "longTasks": 0
+          }
+        },
+        "webgpu": {
+          "frameIntervals": {
+            "count": 471,
+            "p50": 6.1,
+            "p95": 6.2,
+            "p99": 9.3,
+            "mean": 6.1,
+            "max": 12.2
+          },
+          "droppedFrames": 5,
+          "droppedRatio": 0.011,
+          "renderP50": 0.5,
+          "renderP95": 0.7,
+          "renderP99": 0.8,
+          "renderMean": 0.51,
+          "droppedFrames60": 0,
+          "droppedRatio60": 0,
+          "renderTimes": {
+            "count": 78,
+            "p50": 0.5,
+            "p95": 0.7,
+            "p99": 0.8,
+            "mean": 0.51
+          },
+          "trace": {
+            "paint": {
+              "count": 10,
+              "totalMs": 0.174,
+              "p50": 0.022,
+              "p95": 0.029,
+              "max": 0.029
+            },
+            "raster": {
+              "count": 4,
+              "totalMs": 0.243,
+              "p50": 0.032,
+              "p95": 0.176,
+              "max": 0.176
+            },
+            "animationFrame": {
+              "count": 487,
+              "totalMs": 231.521,
+              "p50": 0.466,
+              "p95": 0.599,
+              "max": 1.309
+            },
+            "commit": {
+              "count": 488,
+              "totalMs": 27.182,
+              "p50": 0.054,
+              "p95": 0.071,
+              "max": 0.182
+            },
+            "longTasks": 0
+          }
+        }
+      }
+    },
+    "seekProfile": {
+      "count": 12,
+      "p50": 375.6,
+      "p95": 658.7,
+      "p99": 658.7,
+      "mean": 357.27,
+      "max": 658.7
+    }
+  },
+  "playback": {
+    "skipped": "Background tabs throttle requestAnimationFrame to about 1 fps, so frame pacing needs a focused tab."
+  },
+  "scrub": {
+    "css": {
+      "seekAndRender": {
+        "count": 16,
+        "p50": 43.13,
+        "p95": 95.38,
+        "p99": 95.38,
+        "mean": 44.86,
+        "max": 95.38
+      }
+    },
+    "webgl": {
+      "seekAndRender": {
+        "count": 16,
+        "p50": 28.26,
+        "p95": 58.48,
+        "p99": 58.48,
+        "mean": 30.97,
+        "max": 58.48
+      }
+    },
+    "webgpu": {
+      "seekAndRender": {
+        "count": 16,
+        "p50": 28.01,
+        "p95": 52.5,
+        "p99": 52.5,
+        "mean": 27.64,
+        "max": 52.5
+      }
+    }
+  }
+}

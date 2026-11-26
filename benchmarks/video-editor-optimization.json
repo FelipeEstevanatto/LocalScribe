@@ -1,0 +1,851 @@
+{
+  "date": "2026-11-23",
+  "browser": "Edge 158.0.4370.33 (headless, Windows)",
+  "runsPerCase": 3,
+  "beforeRevision": "add548f with shared working-tree UI edits",
+  "after": "same checkout plus optimization changes",
+  "results": {
+    "before": {
+      "import": [
+        {
+          "run": 0,
+          "firstClipMs": 180.83000004291534,
+          "firstFrameMs": 511.5200001001358,
+          "assetsMs": 1202.8650000095367,
+          "clips": 2,
+          "filmstrips": 2,
+          "tiles": 0,
+          "waves": 2,
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "firstClipMs": 98.54499995708466,
+          "firstFrameMs": 196.5349999666214,
+          "assetsMs": 460.83000004291534,
+          "clips": 2,
+          "filmstrips": 2,
+          "tiles": 0,
+          "waves": 2,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "firstClipMs": 120.57999992370605,
+          "firstFrameMs": 205.4299999475479,
+          "assetsMs": 440.1799999475479,
+          "clips": 2,
+          "filmstrips": 2,
+          "tiles": 0,
+          "waves": 2,
+          "errors": 0
+        }
+      ],
+      "zoom": [
+        {
+          "run": 0,
+          "times": [
+            16.12999999523163,
+            11.659999966621399,
+            13.18500006198883,
+            17.84999990463257,
+            13.335000038146973,
+            16.81500005722046,
+            31.31499993801117,
+            16.41000008583069
+          ],
+          "totalMs": 136.70000004768372,
+          "zoom": "68",
+          "width": "31473px",
+          "spans": 7,
+          "clips": 3,
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "times": [
+            12.604999899864197,
+            15.150000095367432,
+            12.865000009536743,
+            16.110000014305115,
+            14.144999980926514,
+            15.574999928474426,
+            13.59500002861023,
+            13.294999957084656
+          ],
+          "totalMs": 113.33999991416931,
+          "zoom": "68",
+          "width": "31473px",
+          "spans": 7,
+          "clips": 3,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "times": [
+            12.590000033378601,
+            11.894999980926514,
+            11.850000023841858,
+            14.605000019073486,
+            12.730000019073486,
+            21.5900000333786,
+            14.574999928474426,
+            15.884999990463257
+          ],
+          "totalMs": 115.72000002861023,
+          "zoom": "68",
+          "width": "31473px",
+          "spans": 7,
+          "clips": 3,
+          "errors": 0
+        }
+      ],
+      "drag": [
+        {
+          "run": 0,
+          "wallMs": 673,
+          "long": {
+            "count": 0,
+            "duration": 0
+          },
+          "width": "1228px",
+          "meta": "640×360 · 30 fps · 0:10.00",
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "wallMs": 613,
+          "long": {
+            "count": 0,
+            "duration": 0
+          },
+          "width": "1228px",
+          "meta": "640×360 · 30 fps · 0:10.00",
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "wallMs": 610,
+          "long": {
+            "count": 0,
+            "duration": 0
+          },
+          "width": "1228px",
+          "meta": "640×360 · 30 fps · 0:10.00",
+          "errors": 0
+        }
+      ],
+      "scrub": [
+        {
+          "run": 0,
+          "wallMs": 566,
+          "long": {
+            "count": 0,
+            "duration": 0
+          },
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "wallMs": 553,
+          "long": {
+            "count": 0,
+            "duration": 0
+          },
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "wallMs": 555,
+          "long": {
+            "count": 0,
+            "duration": 0
+          },
+          "errors": 0
+        }
+      ],
+      "export": [
+        {
+          "run": 0,
+          "ms": 2435,
+          "downloadMs": 2277,
+          "status": "Saved clip-a-with-audio.mp4 (1.5 MB · browser encoder · sound mixed).",
+          "download": "clip-a-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:15.00",
+          "note": "3 clips · 0:15.00 · everything runs on this device.",
+          "summary": "640×360 · 0:15.00 · ≈ 9.7 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "ms": 2070,
+          "downloadMs": 1948,
+          "status": "Saved clip-a-with-audio.mp4 (1.5 MB · browser encoder · sound mixed).",
+          "download": "clip-a-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:15.00",
+          "note": "3 clips · 0:15.00 · everything runs on this device.",
+          "summary": "640×360 · 0:15.00 · ≈ 9.7 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "ms": 2006,
+          "downloadMs": 1898,
+          "status": "Saved clip-a-with-audio.mp4 (1.5 MB · browser encoder · sound mixed).",
+          "download": "clip-a-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:15.00",
+          "note": "3 clips · 0:15.00 · everything runs on this device.",
+          "summary": "640×360 · 0:15.00 · ≈ 9.7 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        }
+      ],
+      "copyExport": [
+        {
+          "run": 0,
+          "ms": 772,
+          "downloadMs": 673,
+          "status": "Saved clip-g-with-audio.mp4 (0.8 MB · video copied · sound mixed).",
+          "download": "clip-g-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:06.07",
+          "note": "2 clips · 0:06.07 · everything runs on this device.",
+          "summary": "640×360 · 0:06.07 · ≈ 2.0 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "ms": 771,
+          "downloadMs": 656,
+          "status": "Saved clip-g-with-audio.mp4 (0.8 MB · video copied · sound mixed).",
+          "download": "clip-g-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:06.07",
+          "note": "2 clips · 0:06.07 · everything runs on this device.",
+          "summary": "640×360 · 0:06.07 · ≈ 2.0 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "ms": 722,
+          "downloadMs": 620,
+          "status": "Saved clip-g-with-audio.mp4 (0.8 MB · video copied · sound mixed).",
+          "download": "clip-g-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:06.07",
+          "note": "2 clips · 0:06.07 · everything runs on this device.",
+          "summary": "640×360 · 0:06.07 · ≈ 2.0 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        }
+      ],
+      "copyWithAudio": [
+        {
+          "run": 0,
+          "ms": 860,
+          "downloadMs": 758,
+          "status": "Saved clip-a-with-audio.mp4 (1.2 MB · video copied · sound mixed).",
+          "download": "clip-a-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:10.00",
+          "note": "2 clips · 0:10.00 · everything runs on this device.",
+          "summary": "640×360 · 0:10.00 · ≈ 2.2 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "ms": 804,
+          "downloadMs": 698,
+          "status": "Saved clip-a-with-audio.mp4 (1.2 MB · video copied · sound mixed).",
+          "download": "clip-a-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:10.00",
+          "note": "2 clips · 0:10.00 · everything runs on this device.",
+          "summary": "640×360 · 0:10.00 · ≈ 2.2 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "ms": 816,
+          "downloadMs": 717,
+          "status": "Saved clip-a-with-audio.mp4 (1.2 MB · video copied · sound mixed).",
+          "download": "clip-a-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:10.00",
+          "note": "2 clips · 0:10.00 · everything runs on this device.",
+          "summary": "640×360 · 0:10.00 · ≈ 2.2 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        }
+      ],
+      "fourK": [
+        {
+          "run": 0,
+          "readyMs": 251,
+          "height": 2160,
+          "p50": 450.79500007629395,
+          "p95": 1827.9700000286102,
+          "maxFrameError": 0.03333300000000028,
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "readyMs": 212,
+          "height": 2160,
+          "p50": 452.8700000047684,
+          "p95": 1792.8650000095367,
+          "maxFrameError": 0.03333300000000028,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "readyMs": 320,
+          "height": 2160,
+          "p50": 455.6750000715256,
+          "p95": 1768.369999885559,
+          "maxFrameError": 0.03333300000000028,
+          "errors": 0
+        }
+      ],
+      "engine": [
+        {
+          "mode": "pixel-effects",
+          "run": 0,
+          "ms": 1506.0600000619888,
+          "engine": "webcodecs",
+          "expectedDuration": 4,
+          "duration": 4,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 0
+        },
+        {
+          "mode": "pixel-effects",
+          "run": 1,
+          "ms": 1114.3300000429153,
+          "engine": "webcodecs",
+          "expectedDuration": 4,
+          "duration": 4,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 0
+        },
+        {
+          "mode": "pixel-effects",
+          "run": 2,
+          "ms": 1026.5750000476837,
+          "engine": "webcodecs",
+          "expectedDuration": 4,
+          "duration": 4,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 0
+        },
+        {
+          "mode": "speed-up",
+          "run": 0,
+          "ms": 1089.079999923706,
+          "engine": "webcodecs",
+          "expectedDuration": 2,
+          "duration": 2,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 2
+        },
+        {
+          "mode": "speed-up",
+          "run": 1,
+          "ms": 1236.039999961853,
+          "engine": "webcodecs",
+          "expectedDuration": 2,
+          "duration": 2,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 2
+        },
+        {
+          "mode": "speed-up",
+          "run": 2,
+          "ms": 1062.8199999332428,
+          "engine": "webcodecs",
+          "expectedDuration": 2,
+          "duration": 2,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 2
+        },
+        {
+          "mode": "slow-down",
+          "run": 0,
+          "ms": 1927.0349999666214,
+          "engine": "webcodecs",
+          "expectedDuration": 8,
+          "duration": 7.966667,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 2
+        },
+        {
+          "mode": "slow-down",
+          "run": 1,
+          "ms": 1743.8550000190735,
+          "engine": "webcodecs",
+          "expectedDuration": 8,
+          "duration": 7.966667,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 2
+        },
+        {
+          "mode": "slow-down",
+          "run": 2,
+          "ms": 1925.125,
+          "engine": "webcodecs",
+          "expectedDuration": 8,
+          "duration": 7.966667,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 2
+        }
+      ],
+      "previewAudio": [
+        {
+          "offlineFrames": [
+            2160000
+          ],
+          "mediaElementAdvanced": false,
+          "errors": 0
+        }
+      ]
+    },
+    "after": {
+      "import": [
+        {
+          "run": 0,
+          "firstClipMs": 92.04000008106232,
+          "firstFrameMs": 319.36500000953674,
+          "assetsMs": 928.170000076294,
+          "clips": 2,
+          "filmstrips": 2,
+          "tiles": 0,
+          "waves": 2,
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "firstClipMs": 84.38999998569489,
+          "firstFrameMs": 164.5700000524521,
+          "assetsMs": 409.61500000953674,
+          "clips": 2,
+          "filmstrips": 2,
+          "tiles": 0,
+          "waves": 2,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "firstClipMs": 86.09999990463257,
+          "firstFrameMs": 165.0549999475479,
+          "assetsMs": 432.8799999952316,
+          "clips": 2,
+          "filmstrips": 2,
+          "tiles": 0,
+          "waves": 2,
+          "errors": 0
+        }
+      ],
+      "zoom": [
+        {
+          "run": 0,
+          "times": [
+            11.849999904632568,
+            12.570000052452087,
+            16.179999947547913,
+            14.590000033378601,
+            13.889999985694885,
+            16.045000076293945,
+            35.46499991416931,
+            14.860000014305115
+          ],
+          "totalMs": 135.44999992847443,
+          "zoom": "68",
+          "width": "31473px",
+          "spans": 7,
+          "clips": 3,
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "times": [
+            12.184999942779541,
+            12.565000057220459,
+            14.02999997138977,
+            16.774999976158142,
+            13.980000019073486,
+            17.420000076293945,
+            15.224999904632568,
+            19.645000100135803
+          ],
+          "totalMs": 121.82500004768372,
+          "zoom": "68",
+          "width": "31473px",
+          "spans": 7,
+          "clips": 3,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "times": [
+            12.040000081062317,
+            11.909999966621399,
+            11.549999952316284,
+            14.43500006198883,
+            13.264999985694885,
+            16.445000052452087,
+            15.129999995231628,
+            15.629999995231628
+          ],
+          "totalMs": 110.40500009059906,
+          "zoom": "68",
+          "width": "31473px",
+          "spans": 7,
+          "clips": 3,
+          "errors": 0
+        }
+      ],
+      "drag": [
+        {
+          "run": 0,
+          "wallMs": 642,
+          "long": {
+            "count": 0,
+            "duration": 0
+          },
+          "width": "1228px",
+          "meta": "640×360 · 30 fps · 0:10.00",
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "wallMs": 606,
+          "long": {
+            "count": 0,
+            "duration": 0
+          },
+          "width": "1228px",
+          "meta": "640×360 · 30 fps · 0:10.00",
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "wallMs": 617,
+          "long": {
+            "count": 0,
+            "duration": 0
+          },
+          "width": "1228px",
+          "meta": "640×360 · 30 fps · 0:10.00",
+          "errors": 0
+        }
+      ],
+      "scrub": [
+        {
+          "run": 0,
+          "wallMs": 571,
+          "long": {
+            "count": 0,
+            "duration": 0
+          },
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "wallMs": 554,
+          "long": {
+            "count": 0,
+            "duration": 0
+          },
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "wallMs": 572,
+          "long": {
+            "count": 0,
+            "duration": 0
+          },
+          "errors": 0
+        }
+      ],
+      "export": [
+        {
+          "run": 0,
+          "ms": 2439,
+          "downloadMs": 2267,
+          "status": "Saved clip-a-with-audio.mp4 (1.5 MB · browser encoder · sound mixed).",
+          "download": "clip-a-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:15.00",
+          "note": "3 clips · 0:15.00 · everything runs on this device.",
+          "summary": "640×360 · 0:15.00 · ≈ 9.7 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "ms": 2159,
+          "downloadMs": 2046,
+          "status": "Saved clip-a-with-audio.mp4 (1.5 MB · browser encoder · sound mixed).",
+          "download": "clip-a-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:15.00",
+          "note": "3 clips · 0:15.00 · everything runs on this device.",
+          "summary": "640×360 · 0:15.00 · ≈ 9.7 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "ms": 2120,
+          "downloadMs": 2009,
+          "status": "Saved clip-a-with-audio.mp4 (1.5 MB · browser encoder · sound mixed).",
+          "download": "clip-a-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:15.00",
+          "note": "3 clips · 0:15.00 · everything runs on this device.",
+          "summary": "640×360 · 0:15.00 · ≈ 9.7 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        }
+      ],
+      "copyExport": [
+        {
+          "run": 0,
+          "ms": 759,
+          "downloadMs": 661,
+          "status": "Saved clip-g-with-audio.mp4 (0.8 MB · video copied · sound mixed).",
+          "download": "clip-g-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:06.07",
+          "note": "2 clips · 0:06.07 · everything runs on this device.",
+          "summary": "640×360 · 0:06.07 · ≈ 2.0 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "ms": 738,
+          "downloadMs": 630,
+          "status": "Saved clip-g-with-audio.mp4 (0.8 MB · video copied · sound mixed).",
+          "download": "clip-g-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:06.07",
+          "note": "2 clips · 0:06.07 · everything runs on this device.",
+          "summary": "640×360 · 0:06.07 · ≈ 2.0 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "ms": 933,
+          "downloadMs": 819,
+          "status": "Saved clip-g-with-audio.mp4 (0.8 MB · video copied · sound mixed).",
+          "download": "clip-g-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:06.07",
+          "note": "2 clips · 0:06.07 · everything runs on this device.",
+          "summary": "640×360 · 0:06.07 · ≈ 2.0 MB",
+          "ffmpegCoreRequests": 2,
+          "errors": 0
+        }
+      ],
+      "copyWithAudio": [
+        {
+          "run": 0,
+          "ms": 196,
+          "downloadMs": 95,
+          "status": "Saved clip-a-with-audio.mp4 (1.1 MB · video copied · sound copied).",
+          "download": "clip-a-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:10.00",
+          "note": "2 clips · 0:10.00 · everything runs on this device.",
+          "summary": "640×360 · 0:10.00 · ≈ 2.2 MB",
+          "ffmpegCoreRequests": 0,
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "ms": 183,
+          "downloadMs": 81,
+          "status": "Saved clip-a-with-audio.mp4 (1.1 MB · video copied · sound copied).",
+          "download": "clip-a-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:10.00",
+          "note": "2 clips · 0:10.00 · everything runs on this device.",
+          "summary": "640×360 · 0:10.00 · ≈ 2.2 MB",
+          "ffmpegCoreRequests": 0,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "ms": 203,
+          "downloadMs": 93,
+          "status": "Saved clip-a-with-audio.mp4 (1.1 MB · video copied · sound copied).",
+          "download": "clip-a-with-audio.mp4",
+          "decodeErrors": 0,
+          "meta": "640×360 · 30 fps · 0:10.00",
+          "note": "2 clips · 0:10.00 · everything runs on this device.",
+          "summary": "640×360 · 0:10.00 · ≈ 2.2 MB",
+          "ffmpegCoreRequests": 0,
+          "errors": 0
+        }
+      ],
+      "fourK": [
+        {
+          "run": 0,
+          "readyMs": 3351,
+          "height": 720,
+          "p50": 12.100000023841858,
+          "p95": 39.3400000333786,
+          "maxFrameError": 0.03333300000000028,
+          "errors": 0
+        },
+        {
+          "run": 1,
+          "readyMs": 3293,
+          "height": 720,
+          "p50": 12.004999995231628,
+          "p95": 23.240000009536743,
+          "maxFrameError": 0.03333300000000028,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "readyMs": 2770,
+          "height": 720,
+          "p50": 11.919999957084656,
+          "p95": 18.269999980926514,
+          "maxFrameError": 0.03333300000000028,
+          "errors": 0
+        }
+      ],
+      "engine": [
+        {
+          "mode": "pixel-effects",
+          "run": 0,
+          "ms": 1419.3250000476837,
+          "engine": "webcodecs",
+          "expectedDuration": 4,
+          "duration": 4,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 0
+        },
+        {
+          "mode": "pixel-effects",
+          "run": 1,
+          "ms": 998.8999999761581,
+          "engine": "webcodecs",
+          "expectedDuration": 4,
+          "duration": 4,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 0
+        },
+        {
+          "mode": "pixel-effects",
+          "run": 2,
+          "ms": 981.9049999713898,
+          "engine": "webcodecs",
+          "expectedDuration": 4,
+          "duration": 4,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 0
+        },
+        {
+          "mode": "speed-up",
+          "run": 0,
+          "ms": 469.8600000143051,
+          "engine": "webcodecs",
+          "expectedDuration": 2,
+          "duration": 2,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 0
+        },
+        {
+          "mode": "speed-up",
+          "run": 1,
+          "ms": 435.7450000047684,
+          "engine": "webcodecs",
+          "expectedDuration": 2,
+          "duration": 2,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 0
+        },
+        {
+          "mode": "speed-up",
+          "run": 2,
+          "ms": 469.49000000953674,
+          "engine": "webcodecs",
+          "expectedDuration": 2,
+          "duration": 2,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 0
+        },
+        {
+          "mode": "slow-down",
+          "run": 0,
+          "ms": 417.74000000953674,
+          "engine": "webcodecs",
+          "expectedDuration": 8,
+          "duration": 8,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 0
+        },
+        {
+          "mode": "slow-down",
+          "run": 1,
+          "ms": 486.1799999475479,
+          "engine": "webcodecs",
+          "expectedDuration": 8,
+          "duration": 8,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 0
+        },
+        {
+          "mode": "slow-down",
+          "run": 2,
+          "ms": 471.56499993801117,
+          "engine": "webcodecs",
+          "expectedDuration": 8,
+          "duration": 8,
+          "decodeErrors": 0,
+          "errors": 0,
+          "ffmpegCoreRequests": 0
+        }
+      ],
+      "previewAudio": [
+        {
+          "offlineFrames": [],
+          "mediaElementAdvanced": true,
+          "errors": 0
+        }
+      ]
+    }
+  }
+}

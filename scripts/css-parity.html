@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CSS vs GPU preview parity</title>
+  <style>
+    html, body { margin: 0; background: #111; color: #ddd; font: 13px/1.4 system-ui, sans-serif; }
+    #parity-stage {
+      position: relative;
+      width: 640px;
+      height: 360px;
+      overflow: hidden;
+      background: #000;
+      margin: 16px;
+    }
+    #parity-video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      transform-origin: 50% 50%;
+      display: block;
+    }
+    .video-preview-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      pointer-events: none;
+    }
+    #status { margin: 0 16px 16px; color: #9ca3af; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div id="parity-stage"><video id="parity-video" playsinline muted preload="auto"></video></div>
+  <div id="status">Loading…</div>
+  <script type="module">
+    import { createGlPreview } from '/src/video-gl-preview.ts';
+    import { createWebGpuPreview } from '/src/video-webgpu-preview.ts';
+    import { buildPreviewFramePlan } from '/src/video-preview-plan.ts';
+    import { cssFilter, maskCssStyles } from '/src/video-effects.ts';
+
+    const WIDTH = 640;
+    const HEIGHT = 360;
+    const stage = document.querySelector('#parity-stage');
+    const video = document.querySelector('#parity-video');
+    const status = document.querySelector('#status');
+
+    const CASES = {
+      identity: { effects: {}, transform: {} },
+      colour: { effects: { brightness: 24, contrast: 28, saturation: 45, hue: 34 }, transform: {} },
+      blur: { effects: { blur: 7 }, transform: {} },
+      transform: { effects: {}, transform: { scale: 0.82, scaleX: 1.12, scaleY: 0.94, x: 9, y: -6, rotation: 18 } },
+      opacity: { effects: { opacity: 0.62 }, transform: {} },
+      'mask-rect': { effects: { mask: { shape: 'rect', x: 12, y: 14, width: 62, height: 58, feather: 0 } }, transform: {} },
+      'mask-ellipse': { effects: { mask: { shape: 'ellipse', x: 14, y: 10, width: 68, height: 76, feather: 0 } }, transform: {} },
+      'mask-feather': { effects: { mask: { shape: 'rect', x: 12, y: 14, width: 62, height: 58, feather: 9 } }, transform: {} },
+      'blend-screen': { effects: { blend: 'screen' }, transform: {} },
+      transition: { effects: {}, transform: {}, localTime: 0.55, transition: { type: 'barn-door', duration: 1 } },
+    };
+
+    let compositor = null;
+    let gpuReady = false;
+    let gpuBackend = '';
+    let currentPlan = null;
+    let currentCase = '';
+
+    async function waitFor(target, event) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(event + ' timeout')), 8000);
+        target.addEventListener(event, () => { clearTimeout(timer); resolve(); }, { once: true });
+      });
+    }
+
+    function planFor(config) {
+      const localTime = config.localTime ?? 1.2;
+      return buildPreviewFramePlan({
+        clipId: 'css-parity',
+        source: { key: 'sample', kind: 'video', width: video.videoWidth, height: video.videoHeight },
+        at: localTime,
+        localTime,
+        sourceTime: video.currentTime,
+        transform: config.transform ?? {},
+        effects: config.effects ?? {},
+        transition: config.transition ?? null,
+        trackOpacity: 1,
+        stage: { width: WIDTH, height: HEIGHT, fit: 'contain', dpr: 1 },
+      });
+    }
+
+    function cssFor(plan) {
+      const transform = plan.transform;
+      const opacity = String(plan.opacity);
+      const filter = cssFilter(plan.effects);
+      const reveal = plan.motion.reveal
+        ? `inset(${plan.motion.reveal.top}% ${plan.motion.reveal.right}% ${plan.motion.reveal.bottom}% ${plan.motion.reveal.left}%)`
+        : '';
+      const mask = maskCssStyles(plan.effects, WIDTH, HEIGHT);
+      return {
+        transform: `translate(${transform.x}%, ${transform.y}%) rotate(${transform.rotation}deg) scale(${transform.scale * transform.scaleX}, ${transform.scale * transform.scaleY})`,
+        opacity,
+        filter,
+        mixBlendMode: plan.effects.blend === 'normal' ? 'normal' : plan.effects.blend,
+        clipPath: reveal || mask.clipPath,
+        maskImage: mask.maskImage,
+      };
+    }
+
+    function showCss(plan) {
+      const styles = cssFor(plan);
+      video.style.visibility = '';
+      video.style.transform = styles.transform;
+      video.style.opacity = styles.opacity;
+      video.style.filter = styles.filter;
+      video.style.mixBlendMode = styles.mixBlendMode;
+      video.style.clipPath = styles.clipPath;
+      video.style.maskImage = styles.maskImage;
+      video.style.maskSize = styles.maskImage ? '100% 100%' : '';
+      video.style.maskRepeat = styles.maskImage ? 'no-repeat' : '';
+      video.style.maskPosition = styles.maskImage ? '0 0' : '';
+      video.style.maskMode = styles.maskImage ? 'alpha' : '';
+      video.style.webkitMaskImage = styles.maskImage;
+      if (compositor) compositor.canvas.style.display = 'none';
+    }
+
+    async function ensureCompositor(backend) {
+      if (compositor && gpuBackend === backend) return compositor;
+      compositor?.dispose();
+      compositor = null;
+      gpuReady = false;
+      gpuBackend = backend;
+      compositor = backend === 'webgpu'
+        ? createWebGpuPreview(stage)
+        : createGlPreview(stage, { preserveDrawingBuffer: true });
+      if (!compositor) return null;
+      if ('ready' in compositor) await compositor.ready;
+      gpuReady = compositor.active;
+      return gpuReady ? compositor : null;
+    }
+
+    async function applyCase(name, backend) {
+      const config = CASES[name];
+      if (!config) throw new Error('unknown case ' + name);
+      video.pause();
+      const target = config.localTime ?? 1.2;
+      if (Math.abs(video.currentTime - target) > 0.01) {
+        video.currentTime = target;
+        await waitFor(video, 'seeked');
+      }
+      const plan = planFor(config);
+      currentPlan = plan;
+      currentCase = name;
+      const targetCompositor = await ensureCompositor(backend);
+      if (!targetCompositor) throw new Error(backend + ' unavailable');
+      const result = targetCompositor.render({ plan, source: video });
+      if (!result.rendered) throw new Error('GPU render failed: ' + result.reason);
+      targetCompositor.canvas.style.display = 'block';
+      video.style.visibility = 'hidden';
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      status.textContent = `${name} · ${backend}\nplan ${plan.signature.slice(0, 120)}`;
+      return { name, backend, signature: plan.signature };
+    }
+
+    async function showCase(name) {
+      const config = CASES[name];
+      if (!config) throw new Error('unknown case ' + name);
+      video.pause();
+      const target = config.localTime ?? 1.2;
+      if (Math.abs(video.currentTime - target) > 0.01) {
+        video.currentTime = target;
+        await waitFor(video, 'seeked');
+      }
+      const plan = planFor(config);
+      currentPlan = plan;
+      currentCase = name;
+      showCss(plan);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      status.textContent = `${name} · CSS\nplan ${plan.signature.slice(0, 120)}`;
+      return { name, mode: 'css', signature: plan.signature };
+    }
+
+    window.initCssParity = async () => {
+      video.src = '/tmp-sample.mp4';
+      await waitFor(video, 'loadedmetadata');
+      video.currentTime = 1.2;
+      await waitFor(video, 'seeked');
+      status.textContent = 'Ready';
+      return {
+        width: video.videoWidth,
+        height: video.videoHeight,
+        cases: Object.keys(CASES),
+        gpu: Boolean(navigator.gpu),
+      };
+    };
+    window.showCssCase = showCase;
+    window.showGpuCase = (name, backend = 'webgl') => applyCase(name, backend);
+    window.currentCssPlan = () => currentPlan;
+    window.cssParityInfo = () => ({ currentCase, gpuBackend, gpuReady, cases: Object.keys(CASES) });
+  </script>
+</body>
+</html>

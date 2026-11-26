@@ -1,0 +1,11 @@
+{
+  "capturedAt": "2026-11-23T03:35:00.000Z",
+  "probe": "navigator.gpu.requestAdapter({powerPreference: 'low-power'|'high-performance'|forceFallbackAdapter: true}) and a WebGL2 low-power context",
+  "webgpu": {
+    "lowPower": { "vendor": "nvidia", "architecture": "ampere", "device": "", "description": "" },
+    "highPerformance": { "vendor": "nvidia", "architecture": "ampere", "device": "", "description": "" },
+    "fallbackAdapter": null
+  },
+  "webglLowPower": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti (0x00002489) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "conclusion": "This machine exposes one discrete NVIDIA adapter and no software/fallback adapter. An integrated-GPU profile is unavailable here; low-power and high-performance requests resolve to the same device."
+}

@@ -1,0 +1,510 @@
+{
+  "status": "done",
+  "engine": "ffmpeg-st",
+  "rows": [
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-10s.wav",
+      "ms": 1338.2949999570847,
+      "heapMB": 0.09008499999999975,
+      "note": "pcm_s16le · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-10s.wav",
+      "ms": 111.38999998569489,
+      "bytes": 3840114,
+      "heapMB": 8.390359,
+      "note": "48000 Hz · 2 ch · 10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-10s.mp3",
+      "ms": 16.049999952316284,
+      "heapMB": 0,
+      "note": "mp3 · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-10s.mp3",
+      "ms": 85.20000004768372,
+      "bytes": 3840114,
+      "heapMB": 8.491316000000001,
+      "note": "48000 Hz · 2 ch · 10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-10s.m4a",
+      "ms": 22.264999985694885,
+      "heapMB": 0,
+      "note": "aac · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-10s.m4a",
+      "ms": 83.14000010490417,
+      "bytes": 3842162,
+      "heapMB": 8.410263,
+      "note": "48000 Hz · 2 ch · 10.01 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-10s.flac",
+      "ms": 25.890000104904175,
+      "heapMB": 0,
+      "note": "flac · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-10s.flac",
+      "ms": 72.49000000953674,
+      "bytes": 3840114,
+      "heapMB": 8.582275999999997,
+      "note": "48000 Hz · 2 ch · 10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-10s.ogg",
+      "ms": 17.12999999523163,
+      "heapMB": 0,
+      "note": "vorbis · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-10s.ogg",
+      "ms": 71.87999999523163,
+      "bytes": 3840114,
+      "heapMB": 7.959479000000002,
+      "note": "48000 Hz · 2 ch · 10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-10s.opus",
+      "ms": 15.294999957084656,
+      "heapMB": 0,
+      "note": "opus · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-10s.opus",
+      "ms": 78.0550000667572,
+      "bytes": 3840114,
+      "heapMB": 7.952438000000001,
+      "note": "48000 Hz · 2 ch · 10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-10s.webm",
+      "ms": 17.695000052452087,
+      "heapMB": 0,
+      "note": "opus · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-10s.webm",
+      "ms": 79.40499997138977,
+      "bytes": 3840114,
+      "heapMB": 7.756464000000001,
+      "note": "48000 Hz · 2 ch · 10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-10s.aac",
+      "ms": 17.920000076293945,
+      "heapMB": 0,
+      "note": "aac · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-10s.aac",
+      "ms": 88.22500002384186,
+      "bytes": 3850354,
+      "heapMB": -48.426859,
+      "note": "48000 Hz · 2 ch · 10.03 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-10s.aiff",
+      "ms": 62.080000042915344,
+      "heapMB": -0.7815729999999999,
+      "note": "pcm_s16be · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-10s.aiff",
+      "ms": 76.65499997138977,
+      "bytes": 3840114,
+      "heapMB": 0.245533,
+      "note": "48000 Hz · 2 ch · 10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-10s.caf",
+      "ms": 59.00499999523163,
+      "heapMB": 0.0279910000000001,
+      "note": "pcm_s16le · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-10s.caf",
+      "ms": 80.14999997615814,
+      "bytes": 3840114,
+      "heapMB": 0.10354899999999922,
+      "note": "48000 Hz · 2 ch · 10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-10s.mp4",
+      "ms": 24.12000000476837,
+      "heapMB": 0,
+      "note": "aac · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-10s.mp4",
+      "ms": 74.8400000333786,
+      "bytes": 3842162,
+      "heapMB": -0.13664399999999866,
+      "note": "48000 Hz · 2 ch · 10.01 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-10s.avi",
+      "ms": 20.484999895095825,
+      "heapMB": 0,
+      "note": "mp3 · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-10s.avi",
+      "ms": 81.41999995708466,
+      "bytes": 3852402,
+      "heapMB": 0.3483799999999988,
+      "note": "48000 Hz · 2 ch · 10.03 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-60s.wav",
+      "ms": 387.10000002384186,
+      "heapMB": 0.03181999999999974,
+      "note": "pcm_s16le · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-60s.wav",
+      "ms": 810.835000038147,
+      "bytes": 23040114,
+      "heapMB": -0.6144479999999994,
+      "note": "48000 Hz · 2 ch · 60.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "trim 10 s",
+      "file": "bench-60s.wav",
+      "ms": 456.1599999666214,
+      "bytes": 3840114,
+      "heapMB": 1.1419239999999995,
+      "note": "10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-60s.mp3",
+      "ms": 37.764999985694885,
+      "heapMB": 0,
+      "note": "mp3 · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-60s.mp3",
+      "ms": 346.9099999666214,
+      "bytes": 23040114,
+      "heapMB": -0.5508509999999998,
+      "note": "48000 Hz · 2 ch · 60.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "trim 10 s",
+      "file": "bench-60s.mp3",
+      "ms": 101.02499997615814,
+      "bytes": 3840114,
+      "heapMB": -0.6951520000000002,
+      "note": "10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-60s.m4a",
+      "ms": 57.609999895095825,
+      "heapMB": 0.040185000000001025,
+      "note": "aac · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-60s.m4a",
+      "ms": 331.3950001001358,
+      "bytes": 23044210,
+      "heapMB": 0.6945409999999992,
+      "note": "48000 Hz · 2 ch · 60.01 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "trim 10 s",
+      "file": "bench-60s.m4a",
+      "ms": 85.20999991893768,
+      "bytes": 3840114,
+      "heapMB": 0.4869280000000007,
+      "note": "10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-60s.flac",
+      "ms": 76.125,
+      "heapMB": 0.04204499999999989,
+      "note": "flac · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-60s.flac",
+      "ms": 324.6050000190735,
+      "bytes": 23040114,
+      "heapMB": -0.06486699999999956,
+      "note": "48000 Hz · 2 ch · 60.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "trim 10 s",
+      "file": "bench-60s.flac",
+      "ms": 91.4099999666214,
+      "bytes": 3840114,
+      "heapMB": -0.3365140000000011,
+      "note": "10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "probe",
+      "file": "bench-60s.ogg",
+      "ms": 34.625,
+      "heapMB": 0,
+      "note": "vorbis · audio",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "decode",
+      "file": "bench-60s.ogg",
+      "ms": 330.8600000143051,
+      "bytes": 23040114,
+      "heapMB": -2.3546759999999995,
+      "note": "48000 Hz · 2 ch · 60.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "trim 10 s",
+      "file": "bench-60s.ogg",
+      "ms": 84.57500004768372,
+      "bytes": 3840114,
+      "heapMB": 2.3553359999999994,
+      "note": "10.00 s",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "encode",
+      "file": "mp3",
+      "ms": 766.8400000333786,
+      "bytes": 773853,
+      "heapMB": 0.7838029999999989,
+      "note": "MP3 · source 48000 Hz · 2 ch",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "encode",
+      "file": "wav",
+      "ms": 286.6600000858307,
+      "bytes": 11520078,
+      "heapMB": 1.9715760000000007,
+      "note": "WAV · PCM · source 48000 Hz · 2 ch",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "encode",
+      "file": "flac",
+      "ms": 370.6200000047684,
+      "bytes": 2541170,
+      "heapMB": 2.588782000000002,
+      "note": "FLAC · lossless · source 48000 Hz · 2 ch",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "encode",
+      "file": "m4a",
+      "ms": 1429.7000000476837,
+      "bytes": 1452794,
+      "heapMB": -12.652509000000002,
+      "note": "M4A · AAC · source 48000 Hz · 2 ch",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "encode",
+      "file": "aac",
+      "ms": 1440.8600000143051,
+      "bytes": 1460413,
+      "heapMB": 1.5130589999999997,
+      "note": "AAC · ADTS · source 48000 Hz · 2 ch",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "encode",
+      "file": "ogg",
+      "ms": 979.8699998855591,
+      "bytes": 677645,
+      "heapMB": 0.7302359999999997,
+      "note": "OGG · Vorbis · source 48000 Hz · 2 ch",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "encode",
+      "file": "opus",
+      "ms": 2254.9099999666214,
+      "bytes": 728023,
+      "heapMB": 0.7843400000000003,
+      "note": "Opus · Ogg · source 48000 Hz · 2 ch",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "encode",
+      "file": "webm",
+      "ms": 2258.7699999809265,
+      "bytes": 745147,
+      "heapMB": 0.8029479999999998,
+      "note": "WebM · Opus · source 48000 Hz · 2 ch",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "encode",
+      "file": "aiff",
+      "ms": 312.80999994277954,
+      "bytes": 11520054,
+      "heapMB": 11.573314,
+      "note": "AIFF · PCM · source 48000 Hz · 2 ch",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "encode",
+      "file": "caf",
+      "ms": 287.88499999046326,
+      "bytes": 11520130,
+      "heapMB": -5.337639000000001,
+      "note": "CAF · PCM · source 48000 Hz · 2 ch",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "effects easy",
+      "file": "gain 6 dB + 1 s fades",
+      "ms": 492.2999999523163,
+      "bytes": 23040114,
+      "heapMB": -2.7763849999999994,
+      "note": "60.00 s · peak 0.098",
+      "ok": true
+    },
+    {
+      "engine": "ffmpeg-st",
+      "op": "effects hard",
+      "file": "denoise + loudness + limiter + pitch/tempo + reverb",
+      "ms": 3359.8499999046326,
+      "bytes": 22002258,
+      "heapMB": -1.3294510000000006,
+      "note": "57.30 s · peak 0.284",
+      "ok": true
+    }
+  ],
+  "meta": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) OpenCode/2.3.2 Chrome/152.0.7977.167 Electron/44.9.1 Safari/537.36",
+    "hardwareConcurrency": 16,
+    "crossOriginIsolated": true,
+    "loadStartMs": -1795256996102.9,
+    "loadEndMs": -1795256995133.1,
+    "loadWallMs": 969.8,
+    "loadBytes": 32232419,
+    "loadTotal": 32232419,
+    "rowCount": 51
+  }
+}

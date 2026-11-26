@@ -1,0 +1,6 @@
+{
+  "capturedAt": "2026-11-23T03:00:00.000Z",
+  "method": "renderPreviewToTarget(source, plan, {width: 640, height: 360}, {backend}) compared with the live 640×360 compositor output.",
+  "webgl": { "width": 640, "height": 360, "diff": { "mean": 0, "p95": 0, "max": 0 } },
+  "webgpu": { "width": 640, "height": 360, "diff": { "mean": 0, "p95": 0, "max": 0 } }
+}

@@ -1,0 +1,379 @@
+LocalScribe — NOTICE
+
+Fluid Speech Pro (ONNX)
+-----------------------
+Model: Fluid Speech Pro by FluidVoice
+Source: https://huggingface.co/FluidVoice-Labs/fluid-speech-pro-onnx
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+         https://creativecommons.org/licenses/by/4.0/
+
+Fluid Speech Mini (ONNX)
+------------------------
+Model: Fluid Speech Mini by FluidVoice
+Source: https://huggingface.co/FluidVoice-Labs/fluid-speech-mini-onnx
+License: CC BY 4.0
+Built on NVIDIA Parakeet TDT 0.6B v3 and Moondream Parakeet Ultra.
+
+Parakeet Redux (ONNX port)
+--------------------------
+Model: Parakeet Redux by Moondream, based on NVIDIA Parakeet TDT 0.6B v3
+Source: https://huggingface.co/Olicorne/parakeet-tdt-0.6b-v3-redux-onnx
+Original: https://huggingface.co/moondream/parakeet-redux
+License: CC BY 4.0
+
+Parakeet Ultra (ONNX ports)
+---------------------------
+Model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3
+Sources: https://huggingface.co/Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx
+         https://huggingface.co/ryusei-46/parakeet-ultra-ONNX-WebGPU
+Original: https://huggingface.co/moondream/parakeet-ultra
+License: CC BY 4.0
+
+Rumble-2-Flash (sherpa-onnx int8)
+---------------------------------
+Model: Rumble-2-Flash by Reson8
+Source: https://huggingface.co/Reson8/Rumble-2-Flash
+ONNX conversion: https://huggingface.co/TypeWhisper/Rumble-2-Flash-sherpa-onnx-int8
+License: Apache 2.0
+         https://www.apache.org/licenses/LICENSE-2.0
+
+Qwen3-ASR 0.6B (sherpa-onnx int8)
+---------------------------------
+Model: Qwen3-ASR 0.6B by Alibaba Cloud
+Source: https://huggingface.co/Qwen/Qwen3-ASR-0.6B
+ONNX conversion: https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25
+License: Apache 2.0
+         https://www.apache.org/licenses/LICENSE-2.0
+
+Phonon-2 (ONNX export)
+----------------------
+Model: Phonon-2 by Fermion Research
+Source: https://huggingface.co/FermionResearch/Phonon-2
+ONNX export: https://huggingface.co/tiyuvta/Phonon-2-ONNX
+License: CC BY 4.0
+         https://creativecommons.org/licenses/by/4.0/
+Derived from NVIDIA Parakeet TDT 0.6B v3.
+
+Granite Speech 5.0 2B (ONNX)
+----------------------------
+Model: Granite Speech 5.0 2B by IBM
+Source: https://huggingface.co/ibm-granite/granite-speech-5.0-2b-ONNX
+License: Apache 2.0
+         https://www.apache.org/licenses/LICENSE-2.0
+
+Moonshine Tiny / Base (ONNX)
+----------------------------
+Model: Moonshine by Useful Sensors / Moonshine AI
+Source: https://huggingface.co/moonshine-ai/moonshine
+ONNX: https://huggingface.co/onnx-community/moonshine-tiny-ONNX
+      https://huggingface.co/onnx-community/moonshine-base-ONNX
+License: MIT
+         https://opensource.org/license/mit
+Runtime: Transformers.js / ONNX Runtime Web (self-hosted WASM assets)
+
+Whisper Tiny, Base, and Small Timestamped (ONNX)
+------------------------------------------------
+Models: Whisper Tiny, Base, and Small by OpenAI
+Base model licenses: Apache 2.0 (see the OpenAI Whisper model cards)
+ONNX exports: https://huggingface.co/onnx-community/whisper-tiny_timestamped
+              https://huggingface.co/onnx-community/whisper-tiny.en
+              https://huggingface.co/onnx-community/whisper-base_timestamped
+              https://huggingface.co/onnx-community/whisper-small_timestamped
+Runtime: Transformers.js / ONNX Runtime Web (self-hosted WASM assets)
+
+Omnilingual ASR 300M (ONNX)
+---------------------------
+Model: Omnilingual ASR by Meta AI
+Source: https://ai.meta.com/blog/omnilingual-asr-advancing-automatic-speech-recognition
+ONNX export: https://huggingface.co/OpenVoiceOS/omnilingual-asr-ctc-300m-onnx
+License: Apache 2.0
+         https://www.apache.org/licenses/LICENSE-2.0
+Runtime: ONNX Runtime Web (self-hosted WASM assets)
+
+tiny-voca (text to speech)
+--------------------------
+Model: tiny-voca by Muhammed Nazeem
+Source: https://github.com/n4ze3m/tiny-voca
+Weights: https://huggingface.co/n4ze3m/tiny-voca
+License: Apache 2.0
+         https://www.apache.org/licenses/LICENSE-2.0
+
+Kokoro-82M (text to speech)
+---------------------------
+Model: Kokoro-82M by hexgrad
+Source: https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX
+Runtime: kokoro-js (Apache 2.0)
+License: Apache 2.0
+         https://www.apache.org/licenses/LICENSE-2.0
+
+Reverb-TTS (voice cloning, used by the app)
+-------------------------------------------
+Model: Reverb-TTS by Software Mansion
+Source: https://huggingface.co/software-mansion/Reverb-TTS
+License: Creative Commons Attribution-NonCommercial 4.0 International
+         (CC BY-NC 4.0) — non-commercial use only.
+         https://creativecommons.org/licenses/by-nc/4.0/
+Runtime: runntime (MIT) and TypeGPU (MIT)
+         https://github.com/software-mansion/runntime
+         https://github.com/software-mansion/typegpu
+The app downloads the int4 weights from Hugging Face at runtime and caches
+them in the browser's OPFS storage. Credit: "Reverb-TTS by Software Mansion".
+
+Underdog Woof (text to speech, used by the app)
+-----------------------------------------------
+Model: Underdog Woof by Underdog / ConwayResearch
+Source: https://huggingface.co/ConwayResearch/Underdog-Woof
+Weights license: Underdog Non-Commercial License 1.0 — non-commercial use
+only. Commercial use needs a license from Underdog (license@conway.tech).
+TypeScript port: adapted from TTSLab's typed-array port
+         https://github.com/MbBrainz/ttslab
+The port is a derivative of the model's reference code and inherits the
+Underdog Non-Commercial License 1.0. Credit: "Voice by Underdog Woof".
+
+Vision and image models (downloaded on demand)
+----------------------------------------------
+All vision inference runs through Transformers.js / ONNX Runtime Web. The app
+downloads model weights from Hugging Face only when a task is first used; no
+image is uploaded.
+
+BiRefNet-lite 512 (studioludens/birefnet-lite-512) — MIT
+  Upstream: https://huggingface.co/ZhengPeng7/BiRefNet_lite
+MODNet (Xenova/modnet) — Apache 2.0
+BRIA RMBG 1.4 (briaai/RMBG-1.4) — non-commercial model weights
+  https://huggingface.co/briaai/RMBG-1.4
+  Commercial use requires a separate license from BRIA.
+Depth Anything V2 Small (onnx-community/depth-anything-v2-small) — Apache 2.0
+D-FINE Nano (onnx-community/dfine-nano-coco-ONNX) — upstream D-FINE is Apache 2.0
+  https://huggingface.co/ustc-community/dfine-nano-coco
+YOLOS Tiny (Xenova/yolos-tiny) — upstream YOLOS is Apache 2.0; see model card
+DETR ResNet-50 (Xenova/detr-resnet-50) — upstream DETR is Apache 2.0; see model card
+SegFormer B0 Clothes (Xenova/segformer_b0_clothes) — see model card; upstream
+  SegFormer weights and code carry NVIDIA's license terms
+SegFormer B3 ADE20K (onnx-community/segformer-b3-finetuned-ade-512-512-ONNX)
+  — see model card; upstream SegFormer weights and code carry NVIDIA's terms
+MobileNetV4 Small (onnx-community/mobilenetv4_conv_small.e2400_r224_in1k)
+  — see model card; upstream timm model is Apache 2.0
+ViT Base (Xenova/vit-base-patch16-224) — see model card; upstream ViT is Apache 2.0
+ViT-GPT2 Image Captioning (Xenova/vit-gpt2-image-captioning) — Apache 2.0
+SAM 3 tracker (onnx-community/sam3-tracker-ONNX) — SAM License (Meta)
+  https://huggingface.co/facebook/sam3
+  The SAM License allows commercial use subject to its terms; read it before
+  redistributing outputs or weights.
+PP-OCRv6 tiny (PaddlePaddle/PP-OCRv6_tiny_det_onnx, PaddlePaddle/PP-OCRv6_tiny_rec_onnx)
+  — Apache 2.0. Runs on ONNX Runtime Web directly, not Transformers.js.
+Mirage (Cactus-Compute/mirage) — Apache 2.0. Runs on the Cactus runtime below.
+
+Cactus runtime, Whistle, and Mirage
+-----------------------------------
+Runtime: Cactus 4.1.4 WebAssembly build (cactus.js, cactus.wasm)
+Source: https://huggingface.co/Cactus-Compute/cactus
+Models: https://huggingface.co/Cactus-Compute/whistle (speech recognition)
+        https://huggingface.co/Cactus-Compute/mirage (scene description)
+License: Apache 2.0 (runtime and both models)
+
+Nemotron 3 Diarization (speaker detection)
+------------------------------------------
+Model: Nemotron 3 Diarization (Streaming Sortformer) by NVIDIA
+ONNX export: https://huggingface.co/onnx-community/Nemotron-3-Diarization-ONNX
+License: OpenMDW-1.1
+The arrival-order speaker cache is ported from the Transformers.js implementation
+(Apache 2.0).
+
+Phonon 31M (text to speech)
+---------------------------
+Model: Phonon 31M English by Gradium
+Source: https://huggingface.co/gradium/phonon-31m-en
+License: Apache 2.0
+Runtime: phonon-tts (npm) — MIT OR Apache-2.0
+
+Supertonic 3 (text to speech)
+-----------------------------
+Model: Supertonic 3 by Supertone
+Source: https://huggingface.co/Supertone/supertonic-3
+License: OpenRAIL-M. The license allows commercial use but forbids some uses,
+including impersonating people without consent and generating deceptive
+content. See the LICENSE file in the model repository for the full terms.
+The text clean-up and chunking follow Supertone's reference helper
+(https://github.com/supertone-inc/supertonic, MIT).
+
+MP3 encoder
+-----------
+Package: @breezystack/lamejs
+Source: https://github.com/breezystack/lamejs
+Upstream: https://github.com/zhuker/lamejs
+License: LGPL-3.0
+         https://www.gnu.org/licenses/lgpl-3.0.html
+The MP3 encoder is bundled as a JavaScript module and runs in the browser.
+Its source is available from the npm package and the upstream repository.
+
+ffmpeg.wasm editor and output encoder
+--------------------------
+Package: @ffmpeg/core
+Source: https://github.com/ffmpegwasm/ffmpeg.wasm
+License: GPL-2.0-or-later
+         https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+The prebuilt FFmpeg core runs in a separate WebAssembly worker built from
+src/ffmpeg-worker.js. Vite copies the runtime from @ffmpeg/core into the
+production build. The GPL and its source availability requirements apply when
+redistributing the core.
+
+Multithreaded ffmpeg.wasm
+-------------------------
+Package: @ffmpeg/core-mt
+Source: https://github.com/ffmpegwasm/ffmpeg.wasm
+License: GPL-2.0-or-later
+When the page is cross-origin isolated, the FFmpeg worker loads this build
+instead. scripts/ffmpeg-mt-plugin.ts serves it unmodified in development and
+copies it to ffmpeg-mt/ in the production build. The same GPL terms apply.
+
+Mediabunny (WebCodecs demuxing, muxing, and conversion)
+-------------------------------------------------------
+Package: mediabunny by Vanilagy
+Source: https://github.com/Vanilagy/mediabunny
+License: MPL-2.0
+         https://www.mozilla.org/en-US/MPL/2.0/
+Used by the video export to copy or transcode clips with the browser's
+WebCodecs encoders and decoders and to write MP4, MOV, and MKV files.
+
+HTDemucs music source separation
+--------------------------------
+Architecture and weights: Meta Platforms, Inc., MIT License
+Source: https://github.com/facebookresearch/demucs
+ONNX export: https://github.com/StemSplit/demucs-onnx
+Model download: https://huggingface.co/StemSplitio/htdemucs-onnx
+6-stem model (guitar and piano): https://huggingface.co/StemSplitio/htdemucs-6s-onnx
+  — MIT License
+Model weights are downloaded on demand and run in the browser.
+
+dizione (English phonemizer)
+----------------------------
+Package: dizione by Muhammed Nazeem
+Source: https://github.com/n4ze3m/dizione
+License: Apache 2.0
+Data: CMUdict (BSD-style license, copied as
+      public/tiny-voca/phonemizer/LICENSE.cmudict) and the Wikipedia
+      Homograph Data (CC BY-SA, copied as
+      public/tiny-voca/phonemizer/LICENSE.homograph-data).
+
+phonemizer.js / eSpeak NG (fast English phonemizer)
+---------------------------------------------------
+Package: phonemizer by Xenova
+Source: https://github.com/xenova/phonemizer.js
+License: Apache 2.0
+Engine: eSpeak NG
+Source: https://github.com/espeak-ng/espeak-ng
+License: GPL-3.0-or-later
+         https://www.gnu.org/licenses/gpl-3.0.html
+The eSpeak NG engine is embedded in the lazily loaded phonemizer JavaScript
+bundle. It is used only by the Fast tiny-voca path; the Accurate path uses
+dizione/Pyodide instead. Redistributing this app with that bundle means
+redistributing the GPL engine, including its source availability terms.
+
+Transformers.js
+---------------
+Copyright (c) Hugging Face.
+Licensed under the Apache License 2.0.
+https://github.com/huggingface/transformers.js
+
+Pyodide
+-------
+Copyright (c) Pyodide contributors.
+Licensed under the Mozilla Public License 2.0.
+https://github.com/pyodide/pyodide
+
+NumPy
+-----
+Copyright (c) NumPy developers.
+Licensed under the BSD 3-Clause License.
+https://numpy.org/
+
+ONNX Runtime Web
+----------------
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT License.
+https://github.com/microsoft/onnxruntime
+
+Research references (not redistributed or executed by this app)
+---------------------------------------------------------------
+Fluid Speech Pico by FluidVoice — not released
+https://fluidvoice.com/labs
+
+Mediabunny and encoder extensions
+---------------------------------
+Package: mediabunny by David Vanilagy
+Source: https://github.com/Vanilagy/mediabunny
+License: Mozilla Public License 2.0 (MPL-2.0)
+         https://www.mozilla.org/en-US/MPL/2.0/
+
+The app lazily imports these optional encoder extensions:
+- @mediabunny/mp3-encoder, based on the LAME MP3 encoder (LGPL-2.1).
+- @mediabunny/aac-encoder, based on FFmpeg's AAC encoder (libavcodec;
+  LGPL-2.1-or-later or GPL depending on the build).
+- @mediabunny/flac-encoder, based on libFLAC (BSD-3-Clause).
+
+The extension packages themselves are published under MPL-2.0. Their bundled
+WASM codec binaries retain the upstream terms listed above; review those terms
+before redistributing a build that includes them. The extensions are served
+from the app's own origin, not a CDN, and are loaded only when the matching
+export format is selected.
+
+WebM duration metadata
+----------------------
+fix-webm-duration by Yury Sitnikov
+Source: https://github.com/yusitnikov/fix-webm-duration
+License: MIT
+         https://opensource.org/license/mit
+
+MediaRecorder omits the duration from WebM headers. This package patches the
+recorded blob in the browser before download; it makes no network requests.
+
+PDF document tooling
+--------------------
+PDF.js (pdfjs-dist) by Mozilla
+Source: https://github.com/mozilla/pdf.js
+License: Apache License 2.0
+         https://www.apache.org/licenses/LICENSE-2.0
+
+pdf-lib
+Source: https://github.com/Hopding/pdf-lib
+License: MIT
+         https://opensource.org/license/mit
+
+@cantoo/pdf-lib (maintained fork with PDF encryption support)
+Source: https://github.com/Cantoo-Scribe/pdf-lib
+License: MIT
+         https://opensource.org/license/mit
+
+exifr
+Source: https://github.com/MikeKovarik/exifr
+License: MIT
+         https://opensource.org/license/mit
+
+spark-md5
+Source: https://github.com/satazor/js-spark-md5
+License: WTFPL OR MIT
+         https://opensource.org/license/mit
+
+Mammoth
+Source: https://github.com/mwilliamson/mammoth.js
+License: BSD-2-Clause
+         https://opensource.org/license/bsd-2-clause
+
+These libraries are lazy-loaded only when the Documents & privacy tool renders
+or creates a PDF, reads image metadata, or extracts DOCX text. Documents stay
+local; no file leaves the tab.
+
+JASSUB (browser ASS/SSA rendering, including libass and bundled dependencies)
+Copyright (c) 2021-2022 JASSUB contributors
+Copyright (c) 2017-2021 JavascriptSubtitlesOctopus contributors
+Source and license notices: https://github.com/ThaUnknown/jassub
+Package: jassub 2.5.38. Loaded only for original ASS/SSA styling.
+
+Application code
+----------------
+Copyright (c) 2026 LocalScribe contributors.
+Licensed under the MIT License. See LICENSE.
+
+This project is an independent demo and is not affiliated with FluidVoice,
+NVIDIA, Moondream, Reson8, Alibaba Cloud, IBM, Hugging Face, Fermion Research,
+or the tiny-voca/dizione authors.

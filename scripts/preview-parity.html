@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Preview compositor parity harness</title>
+  <style>
+    body { margin: 0; background: #111; color: #ddd; font: 14px/1.4 system-ui, sans-serif; }
+    #stages { display: flex; gap: 16px; padding: 16px; flex-wrap: wrap; }
+    .case { background: #000; }
+    .case h2 { font-size: 12px; margin: 0 0 6px; color: #9ca3af; font-weight: 500; }
+    .video-preview-canvas { display: block; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="stages"></div>
+  <script type="module">
+    import { createGlPreview } from '/src/video-gl-preview.ts';
+    import { buildPreviewFramePlan } from '/src/video-preview-plan.ts';
+    import {
+      applyPixelEffects,
+      compositeOperation,
+      cssFilter,
+      drawMask,
+      hasPixelEffects,
+      normalizeEffects,
+    } from '/src/video-effects.ts';
+
+    const WIDTH = 640;
+    const HEIGHT = 360;
+
+    function syntheticSource(kind = 'pattern') {
+      const canvas = document.createElement('canvas');
+      canvas.width = kind === 'square' ? 600 : 960;
+      canvas.height = kind === 'square' ? 600 : 540;
+      const ctx = canvas.getContext('2d');
+      if (kind === 'alpha') {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, 'rgba(239, 68, 68, 0.85)');
+        gradient.addColorStop(1, 'rgba(14, 165, 233, 0.4)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.ellipse(canvas.width / 2, canvas.height / 2, 380, 220, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.fillRect(330, 150, 300, 240);
+      } else if (kind === 'square') {
+        const gradient = ctx.createLinearGradient(0, 0, 600, 600);
+        gradient.addColorStop(0, '#111827');
+        gradient.addColorStop(1, '#f97316');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 600, 600);
+        ctx.fillStyle = '#22d3ee';
+        ctx.fillRect(150, 150, 300, 300);
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(300, 300, 90, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (kind === 'green') {
+        ctx.fillStyle = '#00ff00';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+        gradient.addColorStop(0, '#ff0000');
+        gradient.addColorStop(1, '#0000ff');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(canvas.width * 0.45, 0, canvas.width * 0.55, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(canvas.width * 0.72, canvas.height * 0.5, 70, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, '#0f172a');
+        gradient.addColorStop(0.5, '#38bdf8');
+        gradient.addColorStop(1, '#f59e0b');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const colors = ['#ef4444', '#22c55e', '#3b82f6', '#eab308', '#a855f7', '#ffffff', '#000000'];
+        colors.forEach((color, index) => {
+          ctx.fillStyle = color;
+          ctx.fillRect(40 + index * 120, 40, 90, 90);
+        });
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 64px system-ui';
+        ctx.fillText('LOCALSCRIBE', 60, 430);
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 18;
+        ctx.strokeRect(40, 180, 560, 190);
+      }
+      return new Promise((resolve) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.src = canvas.toDataURL('image/png');
+      });
+    }
+
+    function sampleVideo() {
+      return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.muted = true;
+        video.playsInline = true;
+        video.preload = 'auto';
+        video.src = '/tmp-sample.mp4';
+        video.addEventListener('loadedmetadata', () => {
+          video.currentTime = Math.min(1.5, Math.max(0.1, (video.duration || 2) * 0.35));
+        });
+        video.addEventListener('seeked', () => resolve(video), { once: true });
+        video.addEventListener('error', () => reject(new Error('sample video failed')), { once: true });
+      });
+    }
+
+    function invertLut() {
+      const size = 4;
+      const data = [];
+      for (let b = 0; b < size; b += 1) {
+        for (let g = 0; g < size; g += 1) {
+          for (let r = 0; r < size; r += 1) {
+            data.push(1 - r / (size - 1), 1 - g / (size - 1), 1 - b / (size - 1));
+          }
+        }
+      }
+      return { name: 'Invert', size, data };
+    }
+
+    function drawReference(source, plan) {
+      const width = plan.output.width;
+      const height = plan.output.height;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, width, height);
+      const layer = document.createElement('canvas');
+      layer.width = width;
+      layer.height = height;
+      const layerCtx = layer.getContext('2d', { willReadFrequently: true });
+      const sourceWidth = plan.source.width;
+      const sourceHeight = plan.source.height;
+      const fitScale = plan.stage.fit === 'cover'
+        ? Math.max(width / sourceWidth, height / sourceHeight)
+        : Math.min(width / sourceWidth, height / sourceHeight);
+      const drawWidth = sourceWidth * fitScale;
+      const drawHeight = sourceHeight * fitScale;
+      const effects = normalizeEffects(plan.effects);
+      layerCtx.save();
+      layerCtx.filter = cssFilter(effects);
+      layerCtx.translate(
+        width / 2 + (plan.transform.x / 100) * width,
+        height / 2 + (plan.transform.y / 100) * height,
+      );
+      layerCtx.rotate((plan.transform.rotation * Math.PI) / 180);
+      layerCtx.scale(plan.transform.scale * plan.transform.scaleX, plan.transform.scale * plan.transform.scaleY);
+      layerCtx.drawImage(source, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      layerCtx.restore();
+      if (hasPixelEffects(effects)) {
+        const pixels = layerCtx.getImageData(0, 0, width, height);
+        applyPixelEffects(pixels, effects);
+        layerCtx.putImageData(pixels, 0, 0);
+      }
+      drawMask(layerCtx, width, height, effects);
+      ctx.save();
+      ctx.globalAlpha = plan.opacity;
+      ctx.globalCompositeOperation = compositeOperation(effects.blend);
+      if (plan.motion.reveal) {
+        ctx.beginPath();
+        ctx.rect(
+          (plan.motion.reveal.left / 100) * width,
+          (plan.motion.reveal.top / 100) * height,
+          Math.max(0, width * (1 - (plan.motion.reveal.left + plan.motion.reveal.right) / 100)),
+          Math.max(0, height * (1 - (plan.motion.reveal.top + plan.motion.reveal.bottom) / 100)),
+        );
+        ctx.clip();
+      }
+      ctx.drawImage(layer, 0, 0);
+      ctx.restore();
+      return ctx.getImageData(0, 0, width, height).data;
+    }
+
+    function metrics(a, b, width, height) {
+      const pixels = a.length / 4;
+      const diffs = new Uint32Array(pixels * 3);
+      let sum = 0;
+      let max = 0;
+      let over8 = 0;
+      let over16 = 0;
+      let edgeSum = 0;
+      let edgeCount = 0;
+      let centerSum = 0;
+      let centerCount = 0;
+      let index = 0;
+      for (let pixel = 0; pixel < pixels; pixel += 1) {
+        const x = pixel % width;
+        const y = Math.floor(pixel / width);
+        const edge = x < 24 || y < 24 || x >= width - 24 || y >= height - 24;
+        let pixelMax = 0;
+        for (let channel = 0; channel < 3; channel += 1) {
+          const offset = pixel * 4 + channel;
+          const diff = Math.abs(a[offset] - b[offset]);
+          diffs[index++] = diff;
+          sum += diff;
+          if (diff > max) max = diff;
+          if (diff > pixelMax) pixelMax = diff;
+          if (edge) { edgeSum += diff; edgeCount += 1; }
+          else { centerSum += diff; centerCount += 1; }
+        }
+        if (pixelMax > 8) over8 += 1;
+        if (pixelMax > 16) over16 += 1;
+      }
+      diffs.sort();
+      return {
+        mean: +(sum / diffs.length).toFixed(3),
+        p95: diffs[Math.floor(diffs.length * 0.95)],
+        p99: diffs[Math.floor(diffs.length * 0.99)],
+        max,
+        edgeMean: +(edgeSum / Math.max(1, edgeCount)).toFixed(3),
+        centerMean: +(centerSum / Math.max(1, centerCount)).toFixed(3),
+        pixelsOver8: over8,
+        pixelsOver16: over16,
+        pixels,
+      };
+    }
+
+    const configs = [
+      { name: 'identity', source: 'pattern' },
+      { name: 'fit-cover', source: 'pattern', fit: 'cover' },
+      { name: 'contain-square', source: 'square', fit: 'contain' },
+      { name: 'cover-square', source: 'square', fit: 'cover' },
+      { name: 'cover-square-transform', source: 'square', fit: 'cover', transform: { scale: 0.8, x: 5, y: -4, rotation: 12 } },
+      { name: 'vertical-contain', source: 'pattern', fit: 'contain', stageWidth: 360, stageHeight: 640 },
+      { name: 'vertical-cover', source: 'pattern', fit: 'cover', stageWidth: 360, stageHeight: 640 },
+      { name: 'custom-square-stage', source: 'pattern', fit: 'contain', stageWidth: 500, stageHeight: 500 },
+      { name: 'alpha-identity', source: 'alpha' },
+      { name: 'alpha-transform', source: 'alpha', transform: { scale: 0.8, rotation: 18, x: 8, y: -6 } },
+      { name: 'alpha-blur', source: 'alpha', effects: { blur: 6 } },
+      { name: 'colour', source: 'pattern', effects: { brightness: 18, contrast: 22, saturation: -35, hue: 42 } },
+      { name: 'colour-extremes', source: 'pattern', effects: { brightness: -40, contrast: 55, saturation: 70, hue: -130 } },
+      { name: 'transform', source: 'pattern', transform: { scale: 0.72, scaleX: 1.25, scaleY: 0.85, x: 11, y: -7, rotation: 24 } },
+      { name: 'opacity', source: 'pattern', effects: { opacity: 0.55 } },
+      { name: 'blur', source: 'pattern', effects: { blur: 7 } },
+      { name: 'chroma', source: 'green', effects: { chroma: { enabled: true, color: '#00ff00', tolerance: 0.34, softness: 0.12 } } },
+      { name: 'chroma-red', source: 'green', effects: { chroma: { enabled: true, color: '#ff0000', tolerance: 0.18, softness: 0.05 } } },
+      { name: 'chroma-wide-soft', source: 'green', effects: { chroma: { enabled: true, color: '#00ff00', tolerance: 0.7, softness: 0.5 } } },
+      { name: 'tone', source: 'pattern', effects: { curve: { shadows: 22, midtones: -18, highlights: 14 } } },
+      { name: 'lut', source: 'pattern', effects: { lut: invertLut() } },
+      { name: 'tone-lut', source: 'pattern', effects: { curve: { shadows: 10, midtones: 12, highlights: -8 }, lut: invertLut() } },
+      { name: 'mask-rect', source: 'pattern', effects: { mask: { shape: 'rect', x: 12, y: 14, width: 62, height: 58, feather: 0 } } },
+      { name: 'mask-rect-feather', source: 'pattern', effects: { mask: { shape: 'rect', x: 12, y: 14, width: 62, height: 58, feather: 9 } } },
+      { name: 'mask-ellipse', source: 'pattern', effects: { mask: { shape: 'ellipse', x: 14, y: 10, width: 68, height: 76, feather: 0 } } },
+      { name: 'mask-ellipse-feather', source: 'pattern', effects: { mask: { shape: 'ellipse', x: 14, y: 10, width: 68, height: 76, feather: 9 } } },
+      { name: 'mask-rect-feather-50', source: 'pattern', effects: { mask: { shape: 'rect', x: 8, y: 8, width: 84, height: 84, feather: 50 } } },
+      { name: 'mask-ellipse-feather-50', source: 'pattern', effects: { mask: { shape: 'ellipse', x: 8, y: 8, width: 84, height: 84, feather: 50 } } },
+      { name: 'blur-40', source: 'pattern', effects: { blur: 40 } },
+      { name: 'transition', source: 'pattern', localTime: 0.55, transition: { type: 'barn-door', duration: 1 } },
+      { name: 'transition-push-25', source: 'pattern', localTime: 0.25, transition: { type: 'push', duration: 1 } },
+      { name: 'transition-slide-50', source: 'pattern', localTime: 0.5, transition: { type: 'slide', duration: 1 } },
+      { name: 'transition-barn-75', source: 'pattern', localTime: 0.75, transition: { type: 'barn-door', duration: 1 } },
+      { name: 'transition-split-done', source: 'pattern', localTime: 1, transition: { type: 'split', duration: 1 } },
+      { name: 'split', source: 'pattern', localTime: 0.35, transition: { type: 'split', duration: 1 } },
+      { name: 'blend-screen', source: 'pattern', effects: { blend: 'screen' } },
+      { name: 'blend-lighten', source: 'pattern', effects: { blend: 'lighten' } },
+      { name: 'blend-multiply', source: 'pattern', effects: { blend: 'multiply' } },
+      { name: 'blend-overlay', source: 'pattern', effects: { blend: 'overlay' } },
+      { name: 'blend-darken', source: 'pattern', effects: { blend: 'darken' } },
+      { name: 'blend-dodge', source: 'pattern', effects: { blend: 'color-dodge' } },
+      { name: 'blend-soft-light', source: 'pattern', effects: { blend: 'soft-light' } },
+      { name: 'everything', source: 'green', effects: {
+        brightness: 8, contrast: 12, saturation: -10, hue: 18, blur: 3,
+        chroma: { enabled: true, color: '#00ff00', tolerance: 0.3, softness: 0.1 },
+        curve: { shadows: 8, midtones: -6, highlights: 5 }, lut: invertLut(),
+        mask: { shape: 'ellipse', x: 8, y: 8, width: 84, height: 84, feather: 5 },
+      }, transform: { scale: 0.95, scaleX: 1, scaleY: 1, x: 0, y: 0, rotation: 6 } },
+    ];
+
+    const videoConfigs = [
+      { name: 'video-identity', source: 'video' },
+      { name: 'video-colour', source: 'video', effects: { brightness: 16, contrast: 20, saturation: -24, hue: 28 } },
+      { name: 'video-blur', source: 'video', effects: { blur: 5 } },
+      { name: 'video-transform', source: 'video', transform: { scale: 0.8, x: 7, y: -5, rotation: 14 } },
+    ];
+
+    async function runCase(config, sources) {
+      const source = sources[config.source];
+      const stageWidth = config.stageWidth ?? WIDTH;
+      const stageHeight = config.stageHeight ?? HEIGHT;
+      const stage = document.createElement('div');
+      stage.style.position = 'relative';
+      stage.style.width = `${stageWidth}px`;
+      stage.style.height = `${stageHeight}px`;
+      stage.style.contain = 'layout paint';
+      const card = document.createElement('div');
+      card.className = 'case';
+      card.style.width = `${stageWidth}px`;
+      const title = document.createElement('h2');
+      title.textContent = config.name;
+      card.append(title, stage);
+      document.querySelector('#stages').append(card);
+      const compositor = createGlPreview(stage, { preserveDrawingBuffer: true });
+      if (!compositor) return { name: config.name, error: 'no webgl2' };
+      const sourceWidth = source instanceof HTMLVideoElement ? source.videoWidth : source.naturalWidth;
+      const sourceHeight = source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight;
+      const plan = buildPreviewFramePlan({
+        clipId: config.name,
+        source: {
+          key: config.source + '-' + config.name,
+          kind: source instanceof HTMLVideoElement ? 'video' : 'image',
+          width: sourceWidth,
+          height: sourceHeight,
+        },
+        at: 0,
+        localTime: config.localTime ?? 0,
+        transform: config.transform ?? {},
+        effects: config.effects ?? {},
+        transition: config.transition ?? null,
+        trackOpacity: 1,
+        stage: { width: stageWidth, height: stageHeight, fit: config.fit ?? 'contain', dpr: 1 },
+      });
+      const result = compositor.render({ plan, source });
+      if (!result.rendered) return { name: config.name, error: result.reason };
+      const gpuCanvas = document.createElement('canvas');
+      gpuCanvas.width = plan.output.width;
+      gpuCanvas.height = plan.output.height;
+      const gpuCtx = gpuCanvas.getContext('2d', { willReadFrequently: true });
+      gpuCtx.drawImage(compositor.canvas, 0, 0);
+      let gpuPixels = gpuCtx.getImageData(0, 0, gpuCanvas.width, gpuCanvas.height).data;
+      const reference = drawReference(source, plan);
+      const diff = metrics(gpuPixels, reference, plan.output.width, plan.output.height);
+      if (config.name === 'blur' || config.name === 'video-blur') {
+        const visual = document.createElement('div');
+        visual.style.display = 'flex';
+        visual.style.gap = '8px';
+        visual.style.padding = '8px 0';
+        const gpuView = document.createElement('canvas');
+        gpuView.width = plan.output.width;
+        gpuView.height = plan.output.height;
+        gpuView.getContext('2d').drawImage(gpuCanvas, 0, 0);
+        const diffView = document.createElement('canvas');
+        diffView.width = plan.output.width;
+        diffView.height = plan.output.height;
+        const diffCtx = diffView.getContext('2d');
+        const image = diffCtx.createImageData(plan.output.width, plan.output.height);
+        for (let i = 0; i < reference.length; i += 4) {
+          const value = Math.min(255, Math.abs(gpuPixels[i] - reference[i]) * 4);
+          image.data[i] = value;
+          image.data[i + 1] = value;
+          image.data[i + 2] = value;
+          image.data[i + 3] = 255;
+        }
+        diffCtx.putImageData(image, 0, 0);
+        for (const view of [gpuCanvas, diffView]) {
+          view.style.width = '320px';
+          view.style.height = '180px';
+          visual.append(view);
+        }
+        card.append(visual);
+      }
+      compositor.dispose();
+      stage.remove();
+      return { name: config.name, plan: plan.signature.slice(0, 90), diff };
+    }
+
+    window.runParity = async () => {
+      document.querySelector('#stages').replaceChildren();
+      const sources = {
+        pattern: await syntheticSource('pattern'),
+        green: await syntheticSource('green'),
+        square: await syntheticSource('square'),
+        alpha: await syntheticSource('alpha'),
+      };
+      let video = null;
+      try {
+        video = await sampleVideo();
+        sources.video = video;
+      } catch (error) {
+        video = null;
+      }
+      const results = [];
+      for (const config of configs) {
+        try {
+          results.push(await runCase(config, sources));
+        } catch (error) {
+          results.push({ name: config.name, error: String(error) });
+        }
+      }
+      for (const config of videoConfigs) {
+        if (!video) {
+          results.push({ name: config.name, error: 'sample video unavailable' });
+          continue;
+        }
+        try {
+          results.push(await runCase(config, sources));
+        } catch (error) {
+          results.push({ name: config.name, error: String(error) });
+        }
+      }
+      return {
+        userAgent: navigator.userAgent,
+        renderer: (() => {
+          const canvas = document.createElement('canvas');
+          const gl = canvas.getContext('webgl2');
+          if (!gl) return null;
+          const ext = gl.getExtension('WEBGL_debug_renderer_info');
+          return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+        })(),
+        results,
+      };
+    };
+  </script>
+</body>
+</html>

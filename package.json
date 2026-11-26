@@ -1,0 +1,60 @@
+{
+  "name": "localscribe",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Privacy-first, fully client-side audio transcription, dictation, text to speech, voice cloning, and vision tools with local models, history, exports, a batch queue, offline support, and a privacy receipt.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "bench:mel": "bun bench/mel.ts",
+    "bench:video": "bun bench/video.mjs",
+    "bench:media": "bun bench/media-gaps.mjs",
+    "bench:seo": "bun bench/seo-audit.mjs",
+    "bench:load": "bun bench/load.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
+    "@cantoo/pdf-lib": "^2.11.1",
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/core-mt": "0.12.10",
+    "@huggingface/transformers": "^4.3.2",
+    "@jsquash/avif": "2.1.1",
+    "@mediabunny/aac-encoder": "1.66.2",
+    "@mediabunny/flac-encoder": "1.66.2",
+    "@mediabunny/mp3-encoder": "1.66.2",
+    "amr-js": "0.0.2",
+    "exifr": "^7.1.3",
+    "fix-webm-duration": "^1.0.6",
+    "jassub": "2.5.38",
+    "kokoro-js": "^1.2.1",
+    "mammoth": "^1.13.0",
+    "marked": "^18.2.1",
+    "mediabunny": "1.66.2",
+    "onnxruntime-web": "^1.23.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.5.438",
+    "phonemizer": "^1.2.1",
+    "phonon-tts": "0.7.0",
+    "runntime": "^0.3.1",
+    "spark-md5": "^3.0.2",
+    "turndown": "^7.2.5",
+    "typegpu": "^0.12.10"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/node": "^22.10.0",
+    "@types/spark-md5": "^3.0.5",
+    "@types/turndown": "^5.0.6",
+    "@webgpu/types": "^0.1.60",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.7.0",
+    "vite": "^7.0.0"
+  }
+}

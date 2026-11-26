@@ -1,0 +1,29 @@
+{
+  "capturedAt": "2026-11-23T03:05:00.000Z",
+  "method": "640×360 same video frame; CSS preview screenshot vs WebGL/WebGPU stage screenshot; RGB channel diff. Golden PNGs are in benchmarks/golden/.",
+  "gate": { "meanChannelError": 2, "p95ChannelError": 4 },
+  "acceptance": {
+    "webgpu": true,
+    "webgl": false,
+    "preferredBackend": "webgpu",
+    "guarantee": "webgpu-only",
+    "note": "WebGPU passes every CSS case within mean 2 / p95 4 and carries the CSS pixel-parity guarantee. WebGL's colour case is mean 2.024 / p95 6; WebGL is the compatibility/export-parity fallback."
+  },
+  "results": [
+    { "name": "identity", "webgl": { "mean": 1.774, "p95": 5, "max": 32, "changedRatioOver2": 0.5375 }, "webgpu": { "mean": 1.434, "p95": 4, "max": 33 } },
+    { "name": "colour", "webgl": { "mean": 2.024, "p95": 6, "max": 60, "changedRatioOver2": 0.6195 }, "webgpu": { "mean": 1.496, "p95": 4, "max": 61 } },
+    { "name": "blur", "webgl": { "mean": 1.627, "p95": 4, "max": 16, "changedRatioOver2": 0.489 }, "webgpu": { "mean": 1.154, "p95": 3, "max": 6 } },
+    { "name": "transform", "webgl": { "mean": 1.476, "p95": 4, "max": 189, "changedRatioOver2": 0.412 }, "webgpu": { "mean": 1.255, "p95": 4, "max": 190 } },
+    { "name": "opacity", "webgl": { "mean": 1.427, "p95": 4, "max": 23, "changedRatioOver2": 0.3989 }, "webgpu": { "mean": 1.201, "p95": 3, "max": 24 } },
+    { "name": "mask-rect", "webgl": { "mean": 1.384, "p95": 4, "max": 100, "changedRatioOver2": 0.34 }, "webgpu": { "mean": 1.132, "p95": 3, "max": 100 } },
+    { "name": "mask-ellipse", "webgl": { "mean": 1.265, "p95": 4, "max": 70, "changedRatioOver2": 0.3588 }, "webgpu": { "mean": 1.003, "p95": 4, "max": 70 } },
+    { "name": "mask-feather", "webgl": { "mean": 1.458, "p95": 4, "max": 27, "changedRatioOver2": 0.4111 }, "webgpu": { "mean": 1.217, "p95": 4, "max": 25 } },
+    { "name": "blend-screen", "webgl": { "mean": 1.774, "p95": 5, "max": 32, "changedRatioOver2": 0.5375 }, "webgpu": { "mean": 1.434, "p95": 4, "max": 33 } },
+    { "name": "transition", "webgl": { "mean": 1.588, "p95": 5, "max": 54, "changedRatioOver2": 0.479 }, "webgpu": { "mean": 1.293, "p95": 4, "max": 53 } }
+  ],
+  "notes": [
+    "All CSS-compatible cases are within a mean of 2.1 and p95 of 6; WebGPU is consistently closer to CSS than WebGL.",
+    "Feathered masks now use an SVG Gaussian alpha mask in the CSS preview, matching the exporter and GPU instead of the old rounded clip-path approximation.",
+    "Differences in identity/colour include video color-management and CSS-compositor filtering differences; the export reference remains the strict parity target."
+  ]
+}

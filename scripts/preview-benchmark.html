@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Preview compositor benchmark</title>
+  <style>
+    body { margin: 0; background: #0b1120; color: #dbeafe; font: 13px/1.4 system-ui, sans-serif; }
+    #bench-stage { position: relative; width: 1280px; height: 720px; background: #000; overflow: hidden; }
+    #playback-stage { position: relative; width: 640px; height: 360px; background: #000; overflow: hidden; margin-top: 12px; }
+    #playback-stage video { width: 100%; height: 100%; object-fit: contain; }
+  </style>
+</head>
+<body>
+  <div id="bench-stage"></div>
+  <div id="playback-stage"></div>
+  <script type="module">
+    import { createGlPreview } from '/src/video-gl-preview.ts';
+    import { createWebGpuPreview } from '/src/video-webgpu-preview.ts';
+    import { buildPreviewFramePlan } from '/src/video-preview-plan.ts';
+    import {
+      applyPixelEffects, compositeOperation, cssFilter, drawMask, hasPixelEffects, maskClipPath, normalizeEffects,
+    } from '/src/video-effects.ts';
+
+    const WIDTH = 1280;
+    const HEIGHT = 720;
+    const FRAMES = 120;
+
+    function makeSource() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1920;
+      canvas.height = 1080;
+      const ctx = canvas.getContext('2d');
+      const gradient = ctx.createLinearGradient(0, 0, 1920, 1080);
+      gradient.addColorStop(0, '#0f172a');
+      gradient.addColorStop(0.45, '#0ea5e9');
+      gradient.addColorStop(0.55, '#f59e0b');
+      gradient.addColorStop(1, '#7c2d12');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 1920, 1080);
+      ['#ef4444', '#22c55e', '#3b82f6', '#eab308', '#a855f7', '#ffffff', '#000000'].forEach((color, index) => {
+        ctx.fillStyle = color;
+        ctx.fillRect(80 + index * 240, 80, 180, 180);
+      });
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = 'bold 148px system-ui';
+      ctx.fillText('LOCALSCRIBE', 100, 890);
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = 36;
+      ctx.strokeRect(80, 360, 1120, 380);
+      return new Promise((resolve) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.src = canvas.toDataURL('image/png');
+      });
+    }
+
+    function invertLut() {
+      const size = 8;
+      const data = [];
+      for (let b = 0; b < size; b += 1) {
+        for (let g = 0; g < size; g += 1) {
+          for (let r = 0; r < size; r += 1) {
+            data.push(1 - r / (size - 1), 1 - g / (size - 1), 1 - b / (size - 1));
+          }
+        }
+      }
+      return { name: 'Invert', size, data };
+    }
+
+    const LUT = invertLut();
+    const CASES = [
+      { name: 'identity', effects: {}, transform: {} },
+      { name: 'colour', effects: { brightness: 18, contrast: 22, saturation: -35, hue: 42 }, transform: {} },
+      { name: 'blur', effects: { blur: 7 }, transform: {} },
+      { name: 'chroma-tone-lut', effects: {
+        chroma: { enabled: true, color: '#00ff00', tolerance: 0.34, softness: 0.12 },
+        curve: { shadows: 10, midtones: -8, highlights: 6 }, lut: LUT,
+      }, transform: {} },
+      { name: 'mask-feather', effects: {
+        mask: { shape: 'ellipse', x: 10, y: 10, width: 80, height: 80, feather: 9 },
+      }, transform: { rotation: 8, scale: 0.92 } },
+      { name: 'everything', effects: {
+        brightness: 8, contrast: 12, saturation: -10, hue: 18, blur: 5,
+        chroma: { enabled: true, color: '#00ff00', tolerance: 0.3, softness: 0.1 },
+        curve: { shadows: 8, midtones: -6, highlights: 5 }, lut: LUT,
+        mask: { shape: 'ellipse', x: 8, y: 8, width: 84, height: 84, feather: 6 },
+      }, transform: { rotation: 6, scale: 0.95 } },
+    ];
+
+    function planFor(config, source, frame, width = WIDTH, height = HEIGHT) {
+      return buildPreviewFramePlan({
+        clipId: config.name,
+        source: { key: 'bench-pattern', kind: 'image', width: source.naturalWidth, height: source.naturalHeight },
+        at: frame / 60,
+        localTime: frame / 60,
+        transform: { ...config.transform, x: Math.sin(frame * 0.05) * 6 },
+        effects: config.effects,
+        trackOpacity: 1,
+        stage: { width, height, fit: 'contain', dpr: 1 },
+      });
+    }
+
+    function stats(values) {
+      const sorted = [...values].sort((a, b) => a - b);
+      const pick = (ratio) => +sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ratio))].toFixed(2);
+      return {
+        count: sorted.length,
+        p50: pick(0.5),
+        p95: pick(0.95),
+        p99: pick(0.99),
+        mean: +(values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2),
+        max: +sorted[sorted.length - 1].toFixed(2),
+      };
+    }
+
+    async function benchBackend(kind, source, width = WIDTH, height = HEIGHT, frames = FRAMES) {
+      const stage = document.querySelector('#bench-stage');
+      stage.replaceChildren();
+      stage.style.width = `${width}px`;
+      stage.style.height = `${height}px`;
+      const factory = kind === 'webgl'
+        ? (target) => createGlPreview(target)
+        : (target) => createWebGpuPreview(target);
+      const compositor = factory(stage);
+      if (!compositor) return { error: kind + ' unavailable' };
+      if ('ready' in compositor) await compositor.ready;
+      if (!compositor.active) return { error: kind + ' inactive' };
+      const results = {};
+      for (const config of CASES) {
+        for (let frame = 0; frame < 8; frame += 1) {
+          compositor.render({ plan: planFor(config, source, frame, width, height), source });
+        }
+        await compositor.whenIdle();
+        const samples = [];
+        for (let frame = 0; frame < frames; frame += 1) {
+          const plan = planFor(config, source, frame, width, height);
+          const start = performance.now();
+          const result = compositor.render({ plan, source });
+          if (!result.rendered) { samples.push(-1); break; }
+          await compositor.whenIdle();
+          samples.push(performance.now() - start);
+        }
+        const valid = samples.filter((sample) => sample >= 0);
+        results[config.name] = valid.length ? stats(valid) : { error: 'render failed' };
+      }
+      const gl = compositor.canvas.getContext('webgl2');
+      const renderer = gl ? (() => {
+        const ext = gl.getExtension('WEBGL_debug_renderer_info');
+        return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+      })() : 'webgpu';
+      compositor.dispose();
+      return { renderer, results };
+    }
+
+    function drawReference(source, plan) {
+      const canvas = document.createElement('canvas');
+      canvas.width = plan.output.width;
+      canvas.height = plan.output.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const layer = document.createElement('canvas');
+      layer.width = canvas.width;
+      layer.height = canvas.height;
+      const layerCtx = layer.getContext('2d', { willReadFrequently: true });
+      const sourceWidth = plan.source.width;
+      const sourceHeight = plan.source.height;
+      const fitScale = plan.stage.fit === 'cover'
+        ? Math.max(canvas.width / sourceWidth, canvas.height / sourceHeight)
+        : Math.min(canvas.width / sourceWidth, canvas.height / sourceHeight);
+      const drawWidth = sourceWidth * fitScale;
+      const drawHeight = sourceHeight * fitScale;
+      const effects = normalizeEffects(plan.effects);
+      layerCtx.save();
+      layerCtx.filter = cssFilter(effects);
+      layerCtx.translate(canvas.width / 2 + (plan.transform.x / 100) * canvas.width,
+        canvas.height / 2 + (plan.transform.y / 100) * canvas.height);
+      layerCtx.rotate((plan.transform.rotation * Math.PI) / 180);
+      layerCtx.scale(plan.transform.scale * plan.transform.scaleX, plan.transform.scale * plan.transform.scaleY);
+      layerCtx.drawImage(source, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      layerCtx.restore();
+      if (hasPixelEffects(effects)) {
+        const image = layerCtx.getImageData(0, 0, canvas.width, canvas.height);
+        applyPixelEffects(image, effects);
+        layerCtx.putImageData(image, 0, 0);
+      }
+      drawMask(layerCtx, canvas.width, canvas.height, effects);
+      ctx.save();
+      ctx.globalAlpha = plan.opacity;
+      ctx.globalCompositeOperation = compositeOperation(effects.blend);
+      if (plan.motion.reveal) {
+        ctx.beginPath();
+        ctx.rect(
+          (plan.motion.reveal.left / 100) * canvas.width,
+          (plan.motion.reveal.top / 100) * canvas.height,
+          Math.max(0, canvas.width * (1 - (plan.motion.reveal.left + plan.motion.reveal.right) / 100)),
+          Math.max(0, canvas.height * (1 - (plan.motion.reveal.top + plan.motion.reveal.bottom) / 100)),
+        );
+        ctx.clip();
+      }
+      ctx.drawImage(layer, 0, 0);
+      ctx.restore();
+      return canvas;
+    }
+
+    function benchCanvas2d(source, cases, width = WIDTH, height = HEIGHT, frames = 10) {
+      const results = {};
+      for (const config of cases) {
+        const used = [];
+        for (let index = 0; index < frames; index += 1) {
+          const plan = planFor(config, source, index, width, height);
+          const start = performance.now();
+          drawReference(source, plan);
+          used.push(performance.now() - start);
+        }
+        results[config.name] = stats(used);
+      }
+      return results;
+    }
+
+    function waitFor(video, event) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(event + ' timeout')), 8000);
+        video.addEventListener(event, () => { clearTimeout(timer); resolve(); }, { once: true });
+      });
+    }
+
+    async function loadVideo(url = '/tmp-sample.mp4') {
+      const video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = 'auto';
+      video.src = url;
+      document.querySelector('#playback-stage').replaceChildren(video);
+      await waitFor(video, 'loadedmetadata');
+      return video;
+    }
+
+    const PACING_CASES = {
+      simple: {
+        width: 1920,
+        height: 1080,
+        effects: {},
+        transform: {},
+      },
+      heavy: {
+        width: 1920,
+        height: 1080,
+        effects: {
+          brightness: 22, contrast: 28, saturation: 44, hue: 32, blur: 40, opacity: 0.88,
+          mask: { shape: 'ellipse', x: 8, y: 8, width: 84, height: 84, feather: 0 },
+        },
+        transform: { scale: 0.94, rotation: 4 },
+      },
+    };
+
+    function pacingPlan(video, config, local, width, height) {
+      const phase = local * 2;
+      return buildPreviewFramePlan({
+        clipId: 'pacing',
+        source: { key: 'sample', kind: 'video', width: video.videoWidth, height: video.videoHeight },
+        at: local,
+        localTime: local,
+        sourceTime: local,
+        transform: {
+          ...config.transform,
+          x: Math.sin(phase) * 5,
+          y: Math.cos(phase * 0.8) * 3,
+          rotation: (config.transform.rotation ?? 0) + Math.sin(phase * 1.3) * 3,
+          scale: (config.transform.scale ?? 1) * (1 + Math.sin(phase * 0.6) * 0.02),
+        },
+        effects: config.effects,
+        stage: { width, height, fit: 'contain', dpr: 1 },
+      });
+    }
+
+    async function measurePacing(video, kind, config, width = config.width ?? 960, height = config.height ?? 540, duration = 3000, profileGpu = false) {
+      const stage = document.querySelector('#playback-stage');
+      stage.style.width = `${width}px`;
+      stage.style.height = `${height}px`;
+      stage.scrollIntoView({ block: 'center' });
+      const compositor = kind === 'css' ? null : (
+        kind === 'webgl' ? createGlPreview(stage) : createWebGpuPreview(stage)
+      );
+      if (compositor && 'ready' in compositor) await compositor.ready;
+      if (compositor && !compositor.active) return { error: kind + ' inactive' };
+      video.pause();
+      video.style.visibility = compositor ? 'hidden' : '';
+      video.style.filter = compositor ? '' : cssFilter(config.effects);
+      video.style.opacity = compositor ? '1' : String(normalizeEffects(config.effects).opacity);
+      video.style.mixBlendMode = compositor ? 'normal' : normalizeEffects(config.effects).blend;
+      video.style.clipPath = compositor ? '' : maskClipPath(config.effects);
+      video.style.transform = compositor ? '' : 'translate(0%, 0%) rotate(0deg) scale(1, 1)';
+      if (Math.abs(video.currentTime) > 0.01) {
+        video.currentTime = 0;
+        await waitFor(video, 'seeked');
+      } else {
+        await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+      }
+      const intervals = [];
+      const renderTimes = [];
+      const queries = [];
+      let lastPlanSignature = '';
+      let gl = null;
+      let timerExt = null;
+      if (profileGpu && compositor && kind === 'webgl') {
+        gl = compositor.canvas.getContext('webgl2');
+        timerExt = gl?.getExtension('EXT_disjoint_timer_query_webgl2') ?? null;
+      }
+      let previous = performance.now();
+      const start = previous;
+      await video.play().catch(() => undefined);
+      await new Promise((resolve) => {
+        const tick = () => {
+          const now = performance.now();
+          intervals.push(now - previous);
+          previous = now;
+          // The 4K fixture is 30 fps; video.currentTime is interpolated
+          // between frames. Quantize so the compositor sees distinct frames,
+          // not a slightly different time on every 165 Hz tick.
+          const local = Math.round(Math.max(0, video.currentTime) * 30) / 30;
+          if (compositor) {
+            const plan = pacingPlan(video, config, local, width, height);
+            // Re-running the GPU compositor at 165 Hz adds no visible picture
+            // and competes with decode, so only render when the visual plan
+            // changed.
+            if (plan.signature !== lastPlanSignature) {
+              lastPlanSignature = plan.signature;
+              const renderStart = performance.now();
+              if (timerExt && gl) {
+                const query = gl.createQuery();
+                gl.beginQuery(timerExt.TIME_ELAPSED_EXT, query);
+                compositor.render({ plan, source: video });
+                gl.endQuery(timerExt.TIME_ELAPSED_EXT);
+                queries.push(query);
+              } else {
+                compositor.render({ plan, source: video });
+              }
+              renderTimes.push(performance.now() - renderStart);
+            }
+          } else {
+            const plan = pacingPlan(video, config, local, width, height);
+            const transform = plan.transform;
+            video.style.transform =
+              `translate(${transform.x}%, ${transform.y}%) rotate(${transform.rotation}deg) ` +
+              `scale(${transform.scale * transform.scaleX}, ${transform.scale * transform.scaleY})`;
+          }
+          if (now - start >= duration) resolve();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      video.pause();
+      const gpuTimes = [];
+      if (queries.length && gl) {
+        gl.flush();
+        const waitStart = performance.now();
+        while (performance.now() - waitStart < 3000) {
+          if (queries.every((query) => gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE))) break;
+          await new Promise((resolve) => setTimeout(resolve, 16));
+        }
+        for (const query of queries) {
+          if (gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE)) {
+            const nanoseconds = gl.getQueryParameter(query, gl.QUERY_RESULT);
+            if (Number.isFinite(nanoseconds) && nanoseconds > 0) gpuTimes.push(nanoseconds / 1_000_000);
+          }
+          gl.deleteQuery(query);
+        }
+      }
+      compositor?.dispose();
+      video.style.visibility = '';
+      video.style.filter = '';
+      video.style.opacity = '';
+      video.style.mixBlendMode = '';
+      video.style.clipPath = '';
+      video.style.transform = '';
+      const warm = intervals.slice(12);
+      const median = [...warm].sort((a, b) => a - b)[Math.floor(warm.length / 2)] || 16.7;
+      const dropped = warm.filter((interval) => interval > median * 1.5).length;
+      const dropped60 = warm.filter((interval) => interval > 1000 / 60).length;
+      return {
+        frameIntervals: stats(warm),
+        droppedFrames: dropped,
+        droppedRatio: +(dropped / Math.max(1, warm.length)).toFixed(3),
+        droppedFrames60: dropped60,
+        droppedRatio60: +(dropped60 / Math.max(1, warm.length)).toFixed(3),
+        renderTimes: renderTimes.length ? stats(renderTimes.slice(12)) : null,
+        gpuTimes: gpuTimes.length ? stats(gpuTimes.slice(12)) : null,
+        frames: warm.length,
+      };
+    }
+
+    async function measureScrub(video, kind) {
+      const compositor = kind === 'css' ? null : (
+        kind === 'webgl' ? createGlPreview(document.querySelector('#playback-stage')) :
+          createWebGpuPreview(document.querySelector('#playback-stage'))
+      );
+      if (compositor && 'ready' in compositor) await compositor.ready;
+      if (compositor && !compositor.active) return { error: kind + ' inactive' };
+      const samples = [];
+      const duration = Math.max(1, video.duration || 5);
+      for (let index = 0; index < 16; index += 1) {
+        const target = (index / 16) * Math.max(0.1, duration - 0.2);
+        const start = performance.now();
+        video.currentTime = target;
+        await waitFor(video, 'seeked');
+        if (compositor) {
+          const plan = buildPreviewFramePlan({
+            clipId: 'scrub',
+            source: { key: 'sample', kind: 'video', width: video.videoWidth, height: video.videoHeight },
+            at: target,
+            localTime: target,
+            transform: {},
+            effects: { brightness: 10, contrast: 12, saturation: -10 },
+            stage: { width: 640, height: 360, fit: 'contain', dpr: 1 },
+          });
+          compositor.render({ plan, source: video });
+          await compositor.whenIdle();
+        }
+        samples.push(performance.now() - start);
+      }
+      compositor?.dispose();
+      return { seekAndRender: stats(samples) };
+    }
+
+    window.measureWebglGpuTime = async (caseName = 'heavy', width = 1920, height = 1080, frames = 60) => {
+      const source = await makeSource();
+      const config = PACING_CASES[caseName] ?? PACING_CASES.heavy;
+      const stage = document.querySelector('#bench-stage');
+      stage.style.width = `${width}px`;
+      stage.style.height = `${height}px`;
+      stage.replaceChildren();
+      const compositor = createGlPreview(stage);
+      if (!compositor) return { error: 'webgl unavailable' };
+      const gl = compositor.canvas.getContext('webgl2');
+      const ext = gl?.getExtension('EXT_disjoint_timer_query_webgl2');
+      if (!gl || !ext) return { error: 'EXT_disjoint_timer_query_webgl2 unavailable' };
+      for (let frame = 0; frame < 8; frame += 1) {
+        compositor.render({ plan: planFor(config, source, frame, width, height), source });
+      }
+      gl.flush();
+      const queries = [];
+      for (let frame = 0; frame < frames; frame += 1) {
+        const query = gl.createQuery();
+        gl.beginQuery(ext.TIME_ELAPSED_EXT, query);
+        compositor.render({ plan: planFor(config, source, frame, width, height), source });
+        gl.endQuery(ext.TIME_ELAPSED_EXT);
+        queries.push(query);
+      }
+      gl.flush();
+      const waitStart = performance.now();
+      while (performance.now() - waitStart < 3000) {
+        if (queries.every((query) => gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE))) break;
+        await new Promise((resolve) => setTimeout(resolve, 16));
+      }
+      const times = [];
+      for (const query of queries) {
+        if (!gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE)) continue;
+        const nanoseconds = gl.getQueryParameter(query, gl.QUERY_RESULT);
+        if (Number.isFinite(nanoseconds) && nanoseconds > 0) times.push(nanoseconds / 1_000_000);
+        gl.deleteQuery(query);
+      }
+      compositor.dispose();
+      stage.replaceChildren();
+      return { caseName, width, height, frames: times.length, gpuMs: times.length ? stats(times) : null };
+    };
+
+    window.probeGpuAdapters = async () => {
+      const adapters = [];
+      if (navigator.gpu) {
+        for (const preference of ['low-power', 'high-performance']) {
+          try {
+            const adapter = await navigator.gpu.requestAdapter({ powerPreference: preference });
+            if (adapter) {
+              const info = adapter.info || {};
+              adapters.push({
+                preference,
+                vendor: info.vendor || '',
+                architecture: info.architecture || '',
+                device: info.device || '',
+                description: info.description || '',
+              });
+            }
+          } catch (error) {
+            adapters.push({ preference, error: String(error) });
+          }
+        }
+      }
+      let fallback = null;
+      if (navigator.gpu) {
+        try {
+          const adapter = await navigator.gpu.requestAdapter({ forceFallbackAdapter: true });
+          if (adapter) {
+            const info = adapter.info || {};
+            fallback = { vendor: info.vendor || '', architecture: info.architecture || '', device: info.device || '', description: info.description || '' };
+          }
+        } catch (error) {
+          fallback = { error: String(error) };
+        }
+      }
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl2', { powerPreference: 'low-power' });
+      let webgl = null;
+      if (gl) {
+        const ext = gl.getExtension('WEBGL_debug_renderer_info');
+        webgl = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+      }
+      return { adapters, fallback, webglLowPower: webgl };
+    };
+
+    async function loadFourKImage() {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('4K source image failed to load'));
+        image.src = '/bench/preview-4k.png';
+      });
+    }
+
+    async function measureFourKSeek() {
+      const video = await loadVideo('/bench/preview-4k.mp4');
+      if (video.videoWidth !== 3840 || video.videoHeight !== 2160) {
+        return { error: `expected 3840x2160 source, got ${video.videoWidth}x${video.videoHeight}` };
+      }
+      const stage = document.querySelector('#playback-stage');
+      stage.style.width = '1280px';
+      stage.style.height = '720px';
+      stage.style.visibility = '';
+      video.style.visibility = '';
+      video.style.objectFit = 'contain';
+      video.style.filter = cssFilter(PACING_CASES.heavy.effects);
+      video.style.clipPath = maskClipPath(PACING_CASES.heavy.effects);
+      video.style.transform = 'translate(0%, 0%) rotate(4deg) scale(0.94, 0.94)';
+      const samples = [];
+      for (let index = 0; index < 12; index += 1) {
+        const target = 0.2 + index * 0.35;
+        const start = performance.now();
+        video.currentTime = target;
+        await waitFor(video, 'seeked');
+        samples.push(performance.now() - start);
+      }
+      video.pause();
+      video.style.filter = '';
+      video.style.clipPath = '';
+      video.style.transform = '';
+      return { seekMs: stats(samples), note: '4K decode + present after seek; CSS paint follows presentation.' };
+    }
+
+    async function setupCssFourKStatic() {
+      const image = await loadFourKImage();
+      const stage = document.querySelector('#playback-stage');
+      stage.style.width = '1280px';
+      stage.style.height = '720px';
+      stage.style.visibility = '';
+      stage.replaceChildren();
+      image.style.width = '100%';
+      image.style.height = '100%';
+      image.style.objectFit = 'contain';
+      image.style.filter = cssFilter(PACING_CASES.heavy.effects);
+      image.style.clipPath = maskClipPath(PACING_CASES.heavy.effects);
+      image.style.transformOrigin = '50% 50%';
+      image.style.animation = 'preview-fourk-pan 2s linear infinite';
+      const style = document.createElement('style');
+      style.id = 'preview-fourk-animation';
+      style.textContent = '@keyframes preview-fourk-pan { 0% { transform: translate(-2%, 0) rotate(3deg) scale(0.94); } 50% { transform: translate(2%, -1%) rotate(5deg) scale(0.96); } 100% { transform: translate(-2%, 0) rotate(3deg) scale(0.94); } }';
+      document.head.append(style);
+      stage.append(image);
+      return { width: image.naturalWidth, height: image.naturalHeight };
+    }
+
+    window.runFourKSourceBenchmark = async () => {
+      const source = await loadFourKImage();
+      if (source.naturalWidth !== 3840 || source.naturalHeight !== 2160) {
+        return { error: `expected 3840x2160 source, got ${source.naturalWidth}x${source.naturalHeight}` };
+      }
+      const webgl = await benchBackend('webgl', source, 1280, 720, 90);
+      const webgpu = await benchBackend('webgpu', source, 1280, 720, 90);
+      const css = await measureFourKSeek();
+      const cssStatic = await setupCssFourKStatic();
+      return {
+        capturedAt: new Date().toISOString(),
+        source: { width: 3840, height: 2160, image: '/bench/preview-4k.png', video: '/bench/preview-4k.mp4' },
+        preview: { width: 1280, height: 720 },
+        webgl,
+        webgpu,
+        css,
+        cssStatic,
+        note: 'WebGL/WebGPU are 4K image texture -> 720p output passes. CSS seek measures 4K video decode/present; cssStatic prepares a 4K image with the heavy CSS filter for the renderer trace.',
+      };
+    };
+
+    window.runPacingCase = async (name, kind, width, height, url = '/tmp-sample.mp4', profileGpu = false) => {
+      const video = await loadVideo(url);
+      const config = { ...PACING_CASES[name] };
+      if (width) config.width = width;
+      if (height) config.height = height;
+      return measurePacing(video, kind, config, width ?? config.width, height ?? config.height, 3000, profileGpu);
+    };
+
+    function pacingDelta(css, gpu) {
+      if (!css?.frameIntervals || !gpu?.frameIntervals) return null;
+      return {
+        p95Ms: +(gpu.frameIntervals.p95 - css.frameIntervals.p95).toFixed(2),
+        p95Improvement: +(1 - gpu.frameIntervals.p95 / Math.max(0.001, css.frameIntervals.p95)).toFixed(3),
+        droppedRatioDelta: +(gpu.droppedRatio - css.droppedRatio).toFixed(3),
+      };
+    }
+
+    window.runPacingBenchmark = async () => {
+      const video = await loadVideo();
+      const stage = document.querySelector('#playback-stage');
+      stage.scrollIntoView({ block: 'center' });
+      const results = {};
+      for (const [name, config] of Object.entries(PACING_CASES)) {
+        results[name] = {
+          css: await measurePacing(video, 'css', config),
+          webgl: await measurePacing(video, 'webgl', config),
+          webgpu: await measurePacing(video, 'webgpu', config),
+        };
+        results[name].webglDelta = pacingDelta(results[name].css, results[name].webgl);
+        results[name].webgpuDelta = pacingDelta(results[name].css, results[name].webgpu);
+      }
+      video.pause();
+      const simple = results.simple;
+      const heavy = results.heavy;
+      const simplePass = Boolean(
+        simple.webgl?.frameIntervals && simple.css?.frameIntervals &&
+        simple.webgl.frameIntervals.p95 <= simple.css.frameIntervals.p95 * 1.1 &&
+        (simple.webgl.droppedRatio60 ?? simple.webgl.droppedRatio) <=
+          (simple.css.droppedRatio60 ?? simple.css.droppedRatio) + 0.02,
+      );
+      const heavyP95Pass = Boolean(
+        heavy.webgl?.frameIntervals && heavy.css?.frameIntervals &&
+        heavy.webgl.frameIntervals.p95 <= heavy.css.frameIntervals.p95 * 0.8,
+      );
+      const heavyCssDrop = heavy.css?.droppedRatio60 ?? heavy.css?.droppedRatio ?? 0;
+      const heavyGpuDrop = heavy.webgl?.droppedRatio60 ?? heavy.webgl?.droppedRatio ?? 0;
+      const heavyDropPass = Boolean(heavyCssDrop > 0.02 && heavyGpuDrop <= heavyCssDrop * 0.8);
+      return {
+        capturedAt: new Date().toISOString(),
+        visibility: document.visibilityState,
+        hasFocus: document.hasFocus(),
+        viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
+        stage: { width: 1920, height: 1080 },
+        cases: results,
+        acceptance: {
+          simpleNoWorseThanCss: simplePass,
+          heavyP95AtLeast20PercentBetter: heavyP95Pass,
+          heavyDroppedFramesAtLeast20PercentBetter: heavyDropPass,
+          heavyEffectivelyPasses: heavyP95Pass || heavyDropPass,
+        },
+      };
+    };
+
+    window.runBenchmark = async () => {
+      const source = await makeSource();
+      const webgl = await benchBackend('webgl', source);
+      const webgpu = await benchBackend('webgpu', source);
+      const canvas2d = benchCanvas2d(source, CASES.filter((config) =>
+        ['colour', 'blur', 'chroma-tone-lut', 'everything'].includes(config.name)));
+      const highResolution = {
+        webgl: await benchBackend('webgl', source, 1920, 1080, 60),
+        webgpu: await benchBackend('webgpu', source, 1920, 1080, 60),
+        canvas2d: benchCanvas2d(source, CASES.filter((config) =>
+          ['colour', 'blur', 'chroma-tone-lut', 'everything'].includes(config.name)),
+          1920, 1080, 4),
+      };
+      const video = await loadVideo();
+      const scrub = {
+        css: await measureScrub(video, 'css'),
+        webgl: await measureScrub(video, 'webgl'),
+        webgpu: await measureScrub(video, 'webgpu'),
+      };
+      video.remove();
+      return {
+        capturedAt: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
+        output: { width: WIDTH, height: HEIGHT },
+        webgl,
+        webgpu,
+        canvas2d,
+        highResolution,
+        playback: {
+          skipped: 'Background tabs throttle requestAnimationFrame to about 1 fps, so frame pacing needs a focused tab.',
+        },
+        scrub,
+      };
+    };
+  </script>
+</body>
+</html>

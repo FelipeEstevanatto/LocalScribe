@@ -1,0 +1,42 @@
+{
+  "capturedAt": "2026-11-23T02:58:36.893Z",
+  "environment": {
+    "display": "165 Hz, Chrome 157, RTX 3060 Ti",
+    "visibility": "visible",
+    "stage": { "width": 1920, "height": 1080 },
+    "viewport": { "width": 1077, "height": 925, "dpr": 1 },
+    "note": "The benchmark tab was brought to the foreground and verified visible; requestAnimationFrame ran at about 167 Hz."
+  },
+  "simple": {
+    "css": { "p50": 6.1, "p95": 6.2, "p99": 7.0, "droppedFrames": 3, "droppedRatio": 0.006, "frames": 475 },
+    "webgl": { "p50": 6.1, "p95": 6.2, "p99": 6.8, "droppedFrames": 1, "droppedRatio": 0.002, "frames": 481, "renderP95": 0.3 },
+    "webgpu": { "p50": 6.1, "p95": 6.2, "p99": 7.0, "droppedFrames": 1, "droppedRatio": 0.002, "frames": 469, "renderP95": 0.4 }
+  },
+  "heavy": {
+    "profile": "brightness 22, contrast 28, saturation 44, hue 32, blur 40 px, opacity 0.88, ellipse mask, animated scale/rotation",
+    "css": { "p50": 6.1, "p95": 6.2, "p99": 6.2, "droppedFrames": 0, "droppedRatio": 0, "frames": 484 },
+    "webgl": { "p50": 6.1, "p95": 6.2, "p99": 6.9, "droppedFrames": 0, "droppedRatio": 0, "frames": 483, "renderP95": 0.3 },
+    "webgpu": { "p50": 6.1, "p95": 6.2, "p99": 6.2, "droppedFrames": 0, "droppedRatio": 0, "frames": 483, "renderP95": 0.4 }
+  },
+  "acceptance": {
+    "simpleNoWorseThanCss": true,
+    "heavyP95AtLeast20PercentBetter": false,
+    "heavyDroppedFramesAtLeast20PercentBetter": false,
+    "heavyEffectivelyPasses": false,
+    "revisionRequested": true,
+    "revisionApproved": true,
+    "revisionApprovedAt": "2026-11-23T03:45:00.000Z",
+    "revision": "Owner-approved replacement: WebGPU CSS parity, no CSS regression for CSS-expressible effects, <16.7 ms p95 for pixel effects CSS cannot render, and CSS fallback above 1080p. See benchmarks/ACCEPTANCE.md.",
+    "traceEvidence": "benchmarks/preview-traces.json",
+    "verdict": "Simple passes. The heavy 20% gate is not demonstrable because both paths are refresh-locked at 6.2 ms p95; the CSS trace spends ~0.13 ms/frame on paint+raster while the WebGL GPU timer measures 2.94 ms p95. The criterion requires explicit user approval to revise."
+  },
+  "fourK": {
+    "output": { "width": 3840, "height": 2160 },
+    "heavy": {
+      "css": { "p50": 6.1, "p95": 6.2, "p99": 6.6, "droppedFrames": 4, "droppedRatio": 0.008, "frames": 475 },
+      "webgl": { "p50": 6.1, "p95": 23.5, "p99": 56.5, "droppedFrames": 76, "droppedRatio": 0.225, "frames": 338 },
+      "webgpu": { "p50": 6.1, "p95": 34.5, "p99": 41.6, "droppedFrames": 58, "droppedRatio": 0.185, "frames": 314 }
+    },
+    "verdict": "GPU preview regresses at 4K; the editor now falls back to the CSS preview above a 1080p output budget."
+  }
+}

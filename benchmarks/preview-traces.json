@@ -1,0 +1,42 @@
+{
+  "capturedAt": "2026-11-23T03:30:00.000Z",
+  "environment": "Chrome 157, RTX 3060 Ti, 165 Hz, visible foreground tab",
+  "heavy": { "width": 1920, "height": 1080, "durationMs": 3000 },
+  "css": {
+    "traceDurationMs": 3073.4,
+    "frameP95": 6.2,
+    "droppedFrames": 0,
+    "paint": { "count": 973, "totalMs": 32.002, "maxMs": 0.217 },
+    "raster": { "count": 3578, "totalMs": 33.668, "maxMs": 0.336 },
+    "animationFrame": { "count": 491, "totalMs": 117.493, "maxMs": 1.396 }
+  },
+  "webgl": {
+    "traceDurationMs": 3103.9,
+    "frameP95": 6.3,
+    "droppedFrames": 1,
+    "paint": { "count": 8, "totalMs": 0.266, "maxMs": 0.08 },
+    "raster": { "count": 6, "totalMs": 0.36, "maxMs": 0.144 },
+    "animationFrame": { "count": 492, "totalMs": 214.736, "maxMs": 23.846 },
+    "renderP95": 0.4
+  },
+  "css4kAt720p": {
+    "source": { "width": 3840, "height": 2160, "url": "/bench/preview-4k.mp4" },
+    "preview": { "width": 1280, "height": 720 },
+    "visibility": "visible",
+    "frameIntervals": { "count": 459, "p50": 6.1, "p95": 6.2, "p99": 6.5, "mean": 6.07, "max": 14.5 },
+    "repeatFrameIntervals": { "count": 478, "p50": 6.1, "p95": 6.3, "p99": 6.9, "mean": 6.06, "max": 7.9 },
+    "droppedFrames": 1,
+    "droppedRatio": 0.002,
+    "paint": { "count": 947, "totalMs": 25.826, "p50": 0.026, "p95": 0.052, "max": 0.235 },
+    "raster": { "count": 1425, "totalMs": 24.561, "p50": 0.012, "p95": 0.03, "max": 0.265 },
+    "animationFrame": { "count": 473, "totalMs": 62.139, "p50": 0.121, "p95": 0.197, "max": 0.974 },
+    "commit": { "count": 483, "totalMs": 41.484, "p50": 0.076, "p95": 0.144, "max": 0.372 },
+    "longTasks": 0
+  },
+  "webglTimerQuery": {
+    "extension": "EXT_disjoint_timer_query_webgl2",
+    "simple": { "frames": 60, "p50": 0.27, "p95": 0.92, "p99": 1.34, "max": 1.34 },
+    "heavy": { "frames": 60, "p50": 2.18, "p95": 2.94, "p99": 3.02, "max": 3.02 }
+  },
+  "verdict": "Both paths are refresh-locked. CSS paint+raster is about 0.13 ms per frame; WebGL GPU time is 2.94 ms p95 for the same heavy frame. There is no implementation path where the GPU preview is 20% faster than the GPU-composited CSS preview for these effects. The owner approved the revised gates in ACCEPTANCE.md."
+}
