@@ -9,6 +9,7 @@
  * export-only (they are far too slow to run at 60 fps on the main thread).
  */
 
+import { runPixelPass, type PixelPass } from './pixel-effects-kernel';
 import { normalizeSpeed, normalizeSpeedPoints, type SpeedPoint } from './video-retime';
 
 export type Easing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'hold';
@@ -586,78 +587,41 @@ function hexToRgb(hex: string): [number, number, number] {
   ];
 }
 
+const lutValues = new WeakMap<readonly number[], Float64Array>();
+
+/**
+ * The per-pixel pass for these effects (chroma key, tone curve, LUT), or null
+ * when there is nothing to do. The LUT's Float64Array copy is made once per LUT.
+ */
+export function pixelPassFor(value?: Partial<ClipEffects> | null): PixelPass | null {
+  const effects = normalizeEffects(value);
+  if (!hasPixelEffects(effects)) return null;
+  const curve = effects.curve;
+  const table = (curve.shadows || curve.midtones || curve.highlights) ? toneTable(curve) : null;
+  const lut = effects.lut;
+  let values: Float64Array | null = null;
+  if (lut) {
+    values = lutValues.get(lut.data) ?? null;
+    if (!values) {
+      values = Float64Array.from(lut.data);
+      lutValues.set(lut.data, values);
+    }
+  }
+  return {
+    key: effects.chroma.enabled ? hexToRgb(effects.chroma.color) : null,
+    tolerance: effects.chroma.tolerance,
+    softness: Math.max(0.0001, effects.chroma.softness),
+    // table[byte] / 255 is what the per-pixel loop used to compute.
+    tone: table ? Float64Array.from(table, (entry) => entry / 255) : null,
+    lutSize: lut ? lut.size : 0,
+    lut: values,
+  };
+}
+
 /** Apply chroma key, tone curve, and LUT in one pass. Export-only. */
 export function applyPixelEffects(image: ImageData, value?: Partial<ClipEffects> | null): void {
-  const effects = normalizeEffects(value);
-  if (!hasPixelEffects(effects)) return;
-  const data = image.data;
-  const table = (effects.curve.shadows || effects.curve.midtones || effects.curve.highlights)
-    ? toneTable(effects.curve)
-    : null;
-  const lut = effects.lut;
-  const key = effects.chroma.enabled ? hexToRgb(effects.chroma.color) : null;
-  const tolerance = effects.chroma.tolerance;
-  const softness = Math.max(0.0001, effects.chroma.softness);
-  for (let index = 0; index < data.length; index += 4) {
-    if (data[index + 3] === 0) continue;
-    let r = data[index] / 255;
-    let g = data[index + 1] / 255;
-    let b = data[index + 2] / 255;
-    if (key) {
-      // Chroma distance favours the green/blue difference, like a real keyer.
-      const dr = r - key[0];
-      const dg = g - key[1];
-      const db = b - key[2];
-      const distance = Math.sqrt(dr * dr * 0.5 + dg * dg + db * db * 0.5);
-      if (distance < tolerance) {
-        data[index + 3] = 0;
-        continue;
-      }
-      if (distance < tolerance + softness) {
-        data[index + 3] = Math.round(data[index + 3] * ((distance - tolerance) / softness));
-      }
-    }
-    if (table) {
-      r = table[Math.round(r * 255)] / 255;
-      g = table[Math.round(g * 255)] / 255;
-      b = table[Math.round(b * 255)] / 255;
-    }
-    if (lut) {
-      const n = lut.size;
-      const rf = Math.max(0, Math.min(n - 1, r * (n - 1)));
-      const gf = Math.max(0, Math.min(n - 1, g * (n - 1)));
-      const bf = Math.max(0, Math.min(n - 1, b * (n - 1)));
-      const r0 = Math.floor(rf), g0 = Math.floor(gf), b0 = Math.floor(bf);
-      const r1 = Math.min(n - 1, r0 + 1), g1 = Math.min(n - 1, g0 + 1), b1 = Math.min(n - 1, b0 + 1);
-      const tr = rf - r0, tg = gf - g0, tb = bf - b0;
-      const stride = n * 3;
-      const plane = stride * n;
-      const low = b0 * plane + g0 * stride;
-      const high = b1 * plane + g0 * stride;
-      const greenStep = (g1 - g0) * stride;
-      const redStep = (r1 - r0) * 3;
-      const values = lut.data;
-      let lowIndex = low + r0 * 3;
-      let highIndex = high + r0 * 3;
-      for (let channel = 0; channel < 3; channel += 1, lowIndex += 1, highIndex += 1) {
-        const interpolateRed = (at: number): number => {
-          const base = values[at];
-          return base + (values[at + redStep] - base) * tr;
-        };
-        const lowGreen = interpolateRed(lowIndex);
-        const highGreen = interpolateRed(highIndex);
-        const lowBlue = lowGreen + (interpolateRed(lowIndex + greenStep) - lowGreen) * tg;
-        const highBlue = highGreen + (interpolateRed(highIndex + greenStep) - highGreen) * tg;
-        const value = lowBlue + (highBlue - lowBlue) * tb;
-        if (channel === 0) r = value;
-        else if (channel === 1) g = value;
-        else b = value;
-      }
-    }
-    data[index] = Math.round(r * 255);
-    data[index + 1] = Math.round(g * 255);
-    data[index + 2] = Math.round(b * 255);
-  }
+  const pass = pixelPassFor(value);
+  if (pass) runPixelPass(image.data, pass);
 }
 
 /** Feathered mask drawn into a clip-sized canvas. */
