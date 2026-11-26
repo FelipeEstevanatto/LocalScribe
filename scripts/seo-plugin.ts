@@ -2,7 +2,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Plugin } from 'vite';
 import { QUICK_TOOLS, isImageTool, type QuickTool } from '../src/quick-catalog';
-import { QUICK_LANGUAGES, quickTranslate } from '../src/quick-locale';
+import { QUICK_LANGUAGES, quickTranslate, useQuickTerms } from '../src/quick-locale';
+import { QUICK_TERMS } from '../src/quick-locale-terms';
+
+useQuickTerms(QUICK_TERMS);
 import { quickCopy } from '../seo/quick-copy';
 import {
   ALL_PAGES,

@@ -7,8 +7,7 @@
  * without touching user content such as transcripts or file names.
  */
 
-import { isQuickLanguage, quickTranslate, type QuickLanguage } from './quick-locale';
-import english from './ui-strings.json';
+import { isQuickLanguage, loadQuickTerms, quickTranslate, type QuickLanguage } from './quick-locale';
 
 const STORAGE_KEY = 'localscribe.quickLocale';
 const ATTRIBUTES = ['placeholder', 'title', 'aria-label', 'alt'] as const;
@@ -52,11 +51,12 @@ const ATTRIBUTE_SKIP = [
 
 type Pack = readonly string[];
 
-// Only English ships in the main chunk. A non-English pack is fetched when the
-// user chooses that language, which keeps the initial JS about 100 KB smaller
-// (gzip) and avoids building seven lookup Maps on startup.
+// No pack ships in the main chunk: English is the page's own copy, and a
+// non-English pack (with the English list it is aligned to) is fetched when
+// the user chooses that language. That keeps the initial JS about 125 KB
+// smaller (gzip) and avoids building lookup Maps on startup.
 const loaders: Record<QuickLanguage, () => Promise<Pack>> = {
-  en: async () => english,
+  en: () => import('./ui-strings.json').then((module) => module.default as Pack),
   pt: () => import('./ui-pt.json').then((module) => module.default as Pack),
   es: () => import('./ui-es.json').then((module) => module.default as Pack),
   fr: () => import('./ui-fr.json').then((module) => module.default as Pack),
@@ -67,10 +67,11 @@ const loaders: Record<QuickLanguage, () => Promise<Pack>> = {
   ru: () => import('./ui-ru.json').then((module) => module.default as Pack),
 };
 
-const packs = new Map<QuickLanguage, Pack>([['en', english]]);
+// English is the page's own copy; nothing to load for it.
+const packs = new Set<QuickLanguage>(['en']);
 const dictionaries = new Map<QuickLanguage, Map<string, string>>();
 
-function buildDictionary(language: QuickLanguage, strings: Pack): void {
+function buildDictionary(language: QuickLanguage, english: Pack, strings: Pack): void {
   if (language === 'en' || strings.length !== english.length) return;
   const map = new Map<string, string>();
   for (let index = 0; index < english.length; index += 1) {
@@ -82,9 +83,12 @@ function buildDictionary(language: QuickLanguage, strings: Pack): void {
 async function loadPack(language: QuickLanguage): Promise<void> {
   if (packs.has(language)) return;
   try {
-    const strings = await loaders[language]();
-    packs.set(language, strings);
-    buildDictionary(language, strings);
+    // The English source list (index-aligned with every pack) and the Quick
+    // tools table are only needed for other languages, so they are not in the
+    // entry chunk.
+    const [english, strings] = await Promise.all([loaders.en(), loaders[language](), loadQuickTerms()]);
+    packs.add(language);
+    buildDictionary(language, english, strings);
   } catch {
     // Translation is an enhancement; keep the English source copy.
   }

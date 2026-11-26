@@ -1,10 +1,13 @@
 import { expect, test } from 'bun:test';
 import { QUICK_TOOLS, quickTool } from '../src/quick-catalog';
-import { QUICK_LANGUAGES, quickTranslate } from '../src/quick-locale';
+import { QUICK_LANGUAGES, loadQuickTerms, quickTranslate } from '../src/quick-locale';
 import { clipRange, fitVideo, parseTime, splitImageStream, tempoFilters, timeLabel, VIDEO_FORMATS } from '../src/quick-video';
 import { parseProbe } from '../src/audio-ffmpeg';
 
-test('the quick tool catalog retains stable routes and translated titles', () => {
+test('the quick tool catalog retains stable routes and translated titles', async () => {
+  // The table loads with a non-English UI pack; English needs none.
+  expect(quickTranslate('pt', 'Video converter')).toBe('Video converter');
+  await loadQuickTerms();
   expect(QUICK_TOOLS).toHaveLength(16);
   expect(new Set(QUICK_TOOLS.map(([id]) => id)).size).toBe(16);
   expect(Object.keys(VIDEO_FORMATS)).toHaveLength(8);
