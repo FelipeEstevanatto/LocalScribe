@@ -3,9 +3,9 @@
 //
 //   bun bench/doc-fixtures.ts [--out temp/perf/fixtures/docs]
 //
-// Text PDFs are written with pdf-lib (a project dependency). Scanned pages are
+// Text PDFs are written with @cantoo/pdf-lib (a project dependency). Scanned pages are
 // JPEGs rendered by ffmpeg drawtext (deterministic), embedded one per page.
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';

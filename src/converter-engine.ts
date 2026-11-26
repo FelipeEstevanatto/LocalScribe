@@ -374,7 +374,7 @@ export function rtfToText(rtf: string): string {
 }
 
 async function textToPdf(title: string, text: string, signal?: AbortSignal): Promise<Blob> {
-  const { PDFDocument, StandardFonts } = await import('pdf-lib');
+  const { PDFDocument, StandardFonts } = await import('@cantoo/pdf-lib');
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const paragraphs = text.replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n');

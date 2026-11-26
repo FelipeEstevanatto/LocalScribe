@@ -38,7 +38,6 @@
     "marked": "^18.2.1",
     "mediabunny": "1.66.2",
     "onnxruntime-web": "^1.23.0",
-    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.5.438",
     "phonemizer": "^1.2.1",
     "phonon-tts": "0.7.0",

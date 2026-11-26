@@ -6,7 +6,9 @@
  * which also drops the original text layer and metadata.
  */
 
-import { PDFDocument } from 'pdf-lib';
+// @cantoo/pdf-lib (a pdf-lib fork with encryption) is the one PDF writer;
+// Document studio already needs it for protect/unlock.
+import { PDFDocument } from '@cantoo/pdf-lib';
 import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 
