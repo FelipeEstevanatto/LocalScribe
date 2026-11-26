@@ -362,7 +362,7 @@ export function normalizeEffects(value?: Partial<ClipEffects> | null): ClipEffec
     },
     lut: lut && Array.isArray(lut.data) && lut.size >= 2 && lut.size <= 64 &&
       lut.data.length === lut.size ** 3 * 3
-      ? { name: String(lut.name || 'LUT'), size: Math.round(lut.size), data: lut.data }
+      ? internLut(lut)
       : null,
     speed: clamp(value?.speed, 0.25, 4, 1),
     speedPoints: normalizeSpeedPoints(value?.speedPoints),
@@ -704,6 +704,87 @@ export function volumeExpression(keys: readonly Keyframe[] | undefined, fallback
   return expression;
 }
 
+// LUTs are large (a 33³ cube is 108k numbers) and never change once loaded, so
+// every clip, history snapshot and saved payload shares one frozen object per
+// distinct LUT. Snapshots copy effects without the LUT, signatures write a
+// short content key, and IndexedDB stores a shared object once per put.
+const internedLuts = new WeakSet<ClipLut>();
+const lutKeys = new WeakMap<ClipLut, string>();
+const lutsByKey = new Map<string, WeakRef<ClipLut>>();
+const lutRegistry = typeof FinalizationRegistry === 'function'
+  ? new FinalizationRegistry<string>((key) => {
+    if (!lutsByKey.get(key)?.deref()) lutsByKey.delete(key);
+  })
+  : null;
+
+function lutContentKey(lut: ClipLut): string {
+  // Exact: hashes the float64 bits, so two LUTs that differ anywhere differ here.
+  const view = new Float64Array(1);
+  const words = new Uint32Array(view.buffer);
+  let first = 2166136261;
+  let second = 2246822519;
+  for (let index = 0; index < lut.data.length; index += 1) {
+    view[0] = lut.data[index];
+    first = Math.imul(first ^ words[0], 16777619);
+    first = Math.imul(first ^ words[1], 16777619);
+    second = Math.imul(second ^ (words[0] + index), 2246822519);
+    second = Math.imul(second ^ words[1], 3266489917);
+  }
+  return `${lut.size}:${lut.data.length}:${(first >>> 0).toString(36)}:${(second >>> 0).toString(36)}`;
+}
+
+function sameLutData(left: readonly number[], right: readonly number[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (!Object.is(left[index], right[index])) return false;
+  }
+  return true;
+}
+
+/** The shared, frozen copy of a LUT with this name and data. */
+export function internLut(lut: ClipLut): ClipLut {
+  if (internedLuts.has(lut)) return lut;
+  const name = String(lut.name || 'LUT');
+  const size = Math.round(lut.size);
+  const content = lutContentKey(lut);
+  const key = `${content}|${name}`;
+  const existing = lutsByKey.get(key)?.deref();
+  if (existing && existing.size === size && sameLutData(existing.data, lut.data)) return existing;
+  const shared = Object.freeze<ClipLut>({ name, size, data: Object.isFrozen(lut.data) ? lut.data : Object.freeze(lut.data.slice()) as number[] });
+  internedLuts.add(shared);
+  lutKeys.set(shared, content);
+  if (!existing) {
+    lutsByKey.set(key, new WeakRef(shared));
+    lutRegistry?.register(shared, key);
+  }
+  return shared;
+}
+
+/** Short content key for a LUT, used in signatures instead of the data. */
+export function lutKey(lut: ClipLut | null | undefined): string | null {
+  if (!lut) return null;
+  let key = lutKeys.get(lut);
+  if (!key) {
+    key = lutContentKey(lut);
+    lutKeys.set(lut, key);
+  }
+  return `${lut.name}|${key}`;
+}
+
+/** Deep copy of clip effects that shares the (immutable) LUT instead of copying it. */
+export function cloneEffects(effects: ClipEffects): ClipEffects {
+  const copy: ClipEffects = structuredClone({ ...effects, lut: null });
+  copy.lut = effects.lut ? internLut(effects.lut) : null;
+  return copy;
+}
+
+/** JSON of clip effects with the LUT written as its content key. */
+export function effectsSignature(effects: ClipEffects | null | undefined): string {
+  if (!effects) return JSON.stringify(effects);
+  return JSON.stringify({ ...effects, lut: lutKey(effects.lut) });
+}
+
 /** Parse an Adobe .cube LUT (3D only). Throws on malformed input. */
 export function parseCubeLut(text: string, name = 'LUT'): ClipLut {
   let size = 0;
@@ -725,7 +806,7 @@ export function parseCubeLut(text: string, name = 'LUT'): ClipLut {
   }
   if (size < 2 || size > 64) throw new Error('This is not a 3D .cube LUT (missing or invalid LUT_3D_SIZE).');
   if (data.length !== size ** 3 * 3) throw new Error('This LUT is incomplete or has the wrong number of entries.');
-  return { name, size, data };
+  return internLut({ name, size, data });
 }
 
 export function effectBadges(value?: Partial<ClipEffects> | null, animation?: Partial<ClipAnimation> | null): string[] {

@@ -145,6 +145,8 @@ import {
   normalizeAnimation,
   normalizeClipTransition,
   normalizeEffects,
+  cloneEffects,
+  effectsSignature,
   parseCubeLut,
   withKeyframe,
   withoutKeyframe,
@@ -4853,7 +4855,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
         ({
           id, file, name, duration, start, track, trimStart, trimEnd, image, audioTrack, volume, mute,
           transform: { ...transform },
-          effects: structuredClone(effects),
+          effects: cloneEffects(effects),
           animation: normalizeAnimation(animation),
           transition: transition ? { ...transition } : undefined,
           proxy,
@@ -4888,7 +4890,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
         clip.id, clip.name, clip.duration, clip.start, clip.track, clip.trimStart, clip.trimEnd, clip.image,
         clip.audioTrack, clip.volume, clip.mute, clip.probe.videoCodec, clip.probe.width, clip.probe.height,
         hasClipTransform(clip.transform) ? clipTransform(clip.transform) : null,
-        JSON.stringify(clip.effects), JSON.stringify(clip.animation),
+        effectsSignature(clip.effects), JSON.stringify(clip.animation),
         clip.transition ? JSON.stringify(clip.transition) : 0, clip.proxy ? 1 : 0, clip.linkGroup ?? 0,
         clip.linkOffset ?? 0, clip.embeddedCaptions?.stream.index, clip.embeddedCaptions?.cues,
         Boolean(clip.embeddedCaptions?.assScript),
@@ -11123,7 +11125,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
           id: clip.id, file: clip.file, name: clip.name, duration: clip.duration, start: clip.start,
           track: clip.track, trimStart: clip.trimStart, trimEnd: clip.trimEnd, image: clip.image,
           audioTrack: clip.audioTrack, volume: clip.volume, mute: clip.mute,
-          transform: { ...clip.transform }, effects: structuredClone(clip.effects),
+          transform: { ...clip.transform }, effects: cloneEffects(clip.effects),
           animation: normalizeAnimation(clip.animation),
           transition: clip.transition ? { ...clip.transition } : undefined,
           proxy: clip.proxy, probe: clip.probe,
@@ -11243,7 +11245,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
       const proxyUrl = state.proxy ? URL.createObjectURL(state.proxy.blob) : '';
       const clip: VideoClip = {
         ...state, id: ++nextId, start: at, track,
-        transform: { ...state.transform }, effects: normalizeEffects(structuredClone(state.effects)),
+        transform: { ...state.transform }, effects: normalizeEffects(cloneEffects(state.effects)),
         animation: normalizeAnimation(state.animation), url, proxyUrl, linkGroup: undefined, linkOffset: undefined,
         peaks: state.peaks ? new Float32Array(state.peaks) : null,
       };
