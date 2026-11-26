@@ -3318,10 +3318,18 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
       if (portable.format !== 'localscribe-video-project' || !portable.state || !Array.isArray(portable.assets)) {
         throw new Error('This is not a LocalScribe video project archive.');
       }
+      // One File per archive entry: IndexedDB stores each File object it is given
+      // separately, so a new wrapper per clip multiplied the stored media.
+      const filesByPath = new Map<string, File>();
       const fileFrom = (meta: PortableFile): File => {
+        const key = `${meta.path}\n${meta.name}\n${meta.type}`;
+        const cached = filesByPath.get(key);
+        if (cached) return cached;
         const blob = blobs.get(meta.path);
         if (!blob) throw new Error(`The archive is missing ${meta.path || meta.name}.`);
-        return new File([blob], meta.name, { type: meta.type || blob.type, lastModified: meta.lastModified || Date.now() });
+        const file = new File([blob], meta.name, { type: meta.type || blob.type, lastModified: meta.lastModified || Date.now() });
+        filesByPath.set(key, file);
+        return file;
       };
       const proxyFrom = (meta: PortableProxy | null): ClipProxy | null => {
         if (!meta) return null;
