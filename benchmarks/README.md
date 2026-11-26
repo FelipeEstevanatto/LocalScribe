@@ -249,8 +249,8 @@ So the GPU path is export-safe for the chroma, tone curve and LUT pass alone;
 geometry, CSS filters and masks would need edge handling matched to Canvas2D
 first. Raw results: `temp/perf/results/parity-ssim-psnr.json` (git-ignored).
 
-GPU pixel pass prototype (`src/pixel-effects-gpu.ts`, opt in with
-`localStorage['localscribe.gpuPixelPass'] = '1'`): only chroma key, tone
+GPU pixel pass (`src/pixel-effects-gpu.ts`, on by default for exports; opt
+out with `localStorage['localscribe.gpuPixelPass'] = '0'`): only chroma key, tone
 curve and LUT move to WebGL2; geometry, filters and masks stay on Canvas2D.
 `scripts/pixel-pass-parity.html` compares it with the CPU kernel on 1080p
 frames. Tone curve and LUT are bit-identical; chroma key differs only on

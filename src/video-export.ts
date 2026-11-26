@@ -330,7 +330,7 @@ function renderClipFrame(
   drawTransformed(layerCtx, sourceWidth, sourceHeight, size, transform, effects, draw);
   const pass = pixelPassFor(effects);
   if (pass && gpuPixelPassEnabled()) {
-    // Prototype (O8): the pass on the GPU, without reading pixels back.
+    // The pass on the GPU, without reading pixels back (worker pool otherwise).
     const result = runPixelPassGpu(layerCtx.canvas, pass, effects.lut ? lutKey(effects.lut) : null);
     if (result) {
       layerCtx.save();

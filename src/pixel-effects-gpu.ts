@@ -1,10 +1,11 @@
 /**
  * The export pixel pass (chroma key, tone curve, 3D LUT) on the GPU with
- * WebGL2. Prototype for O8: it runs only the per-pixel pass, which the parity
+ * WebGL2 (O8). It runs only the per-pixel pass, which the parity
  * harness found export-safe, and leaves geometry, CSS filters and masks on
- * Canvas2D. The shader follows pixel-effects-kernel.ts step by step (same
- * order, byte inputs, LUT values fetched exactly with texelFetch, round half
- * up and clamp on output) so the result can be compared with the CPU kernel.
+ * Canvas2D. Used by default for exports. The shader follows
+ * pixel-effects-kernel.ts step by step (same order, byte inputs, LUT values
+ * fetched exactly with texelFetch, round half up and clamp on output) so the
+ * result can be compared with the CPU kernel.
  *
  * The frame stays on the GPU: the layer canvas is uploaded as a texture, the
  * pass draws into this module's OffscreenCanvas, and the caller draws that
@@ -197,11 +198,14 @@ export function runPixelPassGpu(layer: OffscreenCanvas | HTMLCanvasElement, pass
   return canvas;
 }
 
-/** Whether exports should use the GPU pass (prototype: opt in per browser). */
+/**
+ * Whether exports use the GPU pass. On by default; set
+ * localStorage['localscribe.gpuPixelPass'] = '0' to use the CPU worker pool.
+ */
 export function gpuPixelPassEnabled(): boolean {
   try {
-    return typeof localStorage !== 'undefined' && localStorage.getItem('localscribe.gpuPixelPass') === '1';
+    return typeof localStorage === 'undefined' || localStorage.getItem('localscribe.gpuPixelPass') !== '0';
   } catch {
-    return false;
+    return true;
   }
 }
