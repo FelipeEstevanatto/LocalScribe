@@ -76,21 +76,23 @@ import {
   animationAt,
   dynamicZoomAt,
   type DynamicZoomTiming,
-  applyPixelEffects,
   compositeOperation,
   cssFilter,
   drawMask,
   effectAnimationAt,
   hasAnimation,
   hasMask,
-  hasPixelEffects,
   hasSpeed,
+  lutKey,
+  pixelPassFor,
   hasVisualAnimation,
   hasVisualEffects,
   motionTransitionAt,
   needsRender,
   normalizeEffects,
+  type ClipEffects,
 } from './video-effects';
+import { runPixelPassParallel } from './pixel-effects-pool';
 
 export interface ExportVideoClip extends MergeVideo {
   blob: Blob;
@@ -299,7 +301,7 @@ function renderClipFrame(
   zoomTiming: DynamicZoomTiming,
   getLayer: () => OffscreenCanvasRenderingContext2D,
   draw: (ctx: OffscreenCanvasRenderingContext2D, x: number, y: number, width: number, height: number) => void,
-): void {
+): void | Promise<void> {
   const motionTime = at + (clip.animationTimeOffset ?? 0);
   const effects = effectAnimationAt(clip.animation, motionTime, clip.effects);
   const state = animationAt(clip.animation, motionTime, {
@@ -324,14 +326,31 @@ function renderClipFrame(
   }
   const layerCtx = getLayer();
   drawTransformed(layerCtx, sourceWidth, sourceHeight, size, transform, effects, draw);
-  if (hasPixelEffects(effects)) {
+  const pass = pixelPassFor(effects);
+  if (pass) {
+    // The per-pixel pass runs on worker threads, band by band; the source frame
+    // is already drawn into the layer, so the caller may release it.
     const image = layerCtx.getImageData(0, 0, size.width, size.height);
-    applyPixelEffects(image, effects);
-    layerCtx.putImageData(image, 0, 0);
+    return runPixelPassParallel(image.data, pass, effects.lut ? lutKey(effects.lut) : null).then(() => {
+      layerCtx.putImageData(image, 0, 0);
+      compositeLayer(ctx, layerCtx, size, effects, state.opacity, motion.reveal);
+    });
   }
+  compositeLayer(ctx, layerCtx, size, effects, state.opacity, motion.reveal);
+}
+
+function compositeLayer(
+  ctx: OffscreenCanvasRenderingContext2D,
+  layerCtx: OffscreenCanvasRenderingContext2D,
+  size: { width: number; height: number },
+  effects: ClipEffects,
+  opacity: number,
+  reveal: ReturnType<typeof motionTransitionAt>['reveal'],
+): void {
+  const motion = { reveal };
   drawMask(layerCtx, size.width, size.height, effects);
   ctx.save();
-  ctx.globalAlpha = Math.max(0, Math.min(1, state.opacity));
+  ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
   ctx.globalCompositeOperation = compositeOperation(effects.blend);
   if (motion.reveal) {
     const left = (motion.reveal.left / 100) * size.width;
@@ -378,7 +397,7 @@ async function stillClip(
     abortable(signal);
     const time = frame / fps;
     if (clip) {
-      renderClipFrame(ctx, bitmap.width, bitmap.height, size, clip, time, zoomTiming ?? dynamicZoomTimingFor(clip), getLayer, (target, x, y, w, h) => {
+      await renderClipFrame(ctx, bitmap.width, bitmap.height, size, clip, time, zoomTiming ?? dynamicZoomTimingFor(clip), getLayer, (target, x, y, w, h) => {
         target.drawImage(bitmap, x, y, w, h);
       });
     } else {
@@ -806,14 +825,19 @@ async function exportWithWebCodecs(
                   sample.setDuration(Math.max(0.000001, end - start));
                 }
                 if (!canvas || !ctx) return sample;
+                let rendered: void | Promise<void> = undefined;
                 if (styled) {
-                  renderClipFrame(ctx, sample.displayWidth, sample.displayHeight, size, frameClip, sample.timestamp, zoomTiming, getLayer, (target, x, y, w, h) => {
+                  rendered = renderClipFrame(ctx, sample.displayWidth, sample.displayHeight, size, frameClip, sample.timestamp, zoomTiming, getLayer, (target, x, y, w, h) => {
                     sample.draw(target, x, y, w, h);
                   });
                 } else {
                   drawPicture(ctx, sample.displayWidth, sample.displayHeight, size, clip.transform, (target, x, y, w, h) => {
                     sample.draw(target, x, y, w, h);
                   });
+                }
+                if (rendered) {
+                  const at = sample.timestamp;
+                  return rendered.then(() => overlay?.(ctx, at)).then(() => canvas);
                 }
                 const combined = overlay?.(ctx, sample.timestamp);
                 return combined ? combined.then(() => canvas) : canvas;
