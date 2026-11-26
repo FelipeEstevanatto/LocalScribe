@@ -1,13 +1,14 @@
 /**
  * Vision & image tools.
  *
- * Every task runs through Transformers.js in this tab: ONNX Runtime Web on
- * WebGPU where an adapter exists, WASM otherwise. Images are decoded locally
+ * Every task runs through Transformers.js in a worker (vision-worker.ts):
+ * ONNX Runtime Web on WebGPU where an adapter exists, WASM otherwise. Images are decoded locally
  * and never uploaded. Models are downloaded from Hugging Face on first use and
  * cached by the browser.
  */
 
 import type { RawImage } from '@huggingface/transformers';
+import type { PlainImage, VisionWorkerReply, VisionWorkerRequest, VisionWorkerSelection } from './vision-worker';
 import type { OcrLine } from './ocr';
 import type { MirageScene } from './cactus';
 
@@ -338,233 +339,12 @@ export type VisionResult =
   | { kind: 'scene'; scene: MirageScene }
   | { kind: 'select'; cutout: RawImage; mask: Uint8Array; width: number; height: number; score: number; points: SelectPoint[] };
 
-type LoadedPipeline = ((
-  input: RawImage,
-  options?: Record<string, unknown>,
-) => Promise<unknown>) & { dispose?: () => Promise<void> | void };
-
-interface VisionSelection {
+export interface VisionSelection {
   task: VisionTaskId;
   model: string;
   device: VisionDevice;
   precision?: VisionPrecision;
   onProgress?: (progress: VisionProgress) => void;
-}
-
-interface PipelineCacheEntry {
-  promise: Promise<LoadedPipeline>;
-  ready: boolean;
-  lastUsed: number;
-}
-const pipelineCache = new Map<string, PipelineCacheEntry>();
-const MAX_VISION_PIPELINES = 2;
-
-function visionModelKey({ task, model, device, precision = 'fp32' }: VisionSelection): string {
-  return `${task}:${model}:${device}:${precision}`;
-}
-
-export function isVisionModelLoaded(selection: VisionSelection): boolean {
-  return pipelineCache.get(visionModelKey(selection))?.ready ?? false;
-}
-
-export async function preloadVisionModel(selection: VisionSelection): Promise<void> {
-  await loadPipeline(selection);
-}
-
-function humanBytes(bytes: number): string {
-  return `${(bytes / 1_000_000).toFixed(0)} MB`;
-}
-
-async function loadPipeline(selection: VisionSelection): Promise<LoadedPipeline> {
-  const { task, model, device, precision = 'fp32', onProgress } = selection;
-  const key = visionModelKey(selection);
-  const cached = pipelineCache.get(key);
-  if (cached) {
-    cached.lastUsed = Date.now();
-    return cached.promise;
-  }
-
-  const promise = (async () => {
-    for (const [loadedKey, loaded] of [...pipelineCache]) {
-      if (!loadedKey.startsWith(`${task}:${model}:`)) continue;
-      pipelineCache.delete(loadedKey);
-      try {
-        await (await loaded.promise).dispose?.();
-      } catch {
-        // A failed session must not prevent loading the chosen variant.
-      }
-    }
-    const transformers = await import('@huggingface/transformers');
-    transformers.env.allowLocalModels = false;
-    const tryLoad = async (target: VisionDevice): Promise<LoadedPipeline> => {
-      const revision = getVisionTask(task).models.find((entry) => entry.id === model)?.revision;
-      // Several files download in parallel; report their combined bytes.
-      const files = new Map<string, { loaded: number; total: number }>();
-      const options = {
-        device: target,
-        dtype: precision,
-        revision,
-        progress_callback: (event: {
-          status?: string;
-          file?: string;
-          loaded?: number;
-          total?: number;
-        }) => {
-          if (!onProgress) return;
-          if (event.status === 'progress' && event.total && event.total > 0) {
-            files.set(event.file ?? 'model', { loaded: event.loaded ?? 0, total: event.total });
-            let loaded = 0;
-            let total = 0;
-            for (const entry of files.values()) {
-              loaded += entry.loaded;
-              total += entry.total;
-            }
-            onProgress({
-              phase: 'loading',
-              text: `Downloading the model · ${humanBytes(loaded)} / ${humanBytes(total)}`,
-              percent: (loaded / total) * 100,
-              loaded,
-              total,
-            });
-          } else if (event.status === 'ready') {
-            onProgress({ phase: 'loading', text: 'Preparing the model…', percent: 100 });
-          }
-        },
-      };
-      if (task === 'describe-scene') {
-        const { loadMirage } = await import('./cactus');
-        const mirage = await loadMirage((loaded, total) => onProgress?.({
-          phase: 'loading', text: 'Downloading Mirage', percent: (loaded / total) * 100, loaded, total,
-        }));
-        const describe = async (image: RawImage) => mirage.describe(image.data as Uint8ClampedArray, image.width, image.height, image.channels);
-        return describe as unknown as LoadedPipeline;
-      }
-      if (task === 'ocr') {
-        const ocr = await import('./ocr');
-        await ocr.loadOcr((loaded, total) => onProgress?.({
-          phase: 'loading', text: 'Downloading the OCR models', percent: (loaded / total) * 100, loaded, total,
-        }));
-        const read = async (image: RawImage) => ocr.runOcr(
-          { data: image.data as Uint8ClampedArray, width: image.width, height: image.height, channels: image.channels },
-          { onProgress: (fraction, text) => onProgress?.({ phase: 'running', text, percent: fraction * 100 }) },
-        );
-        return read as unknown as LoadedPipeline;
-      }
-      if (task === 'select-object') {
-        const processor = await transformers.AutoProcessor.from_pretrained(model, { revision });
-        const network = await transformers.Sam3TrackerModel.from_pretrained(model, {
-          ...options,
-          dtype: precision === 'fp16' ? 'q4f16' : 'q4',
-        } as never);
-        // Encode each image once; clicks only rerun the small decoder.
-        let encoded: { image: RawImage; inputs: Record<string, unknown>; embeddings: Record<string, unknown> } | null = null;
-        const select = async (image: RawImage, points: SelectPoint[]) => {
-          if (encoded?.image !== image) {
-            onProgress?.({ phase: 'running', text: 'Encoding the image (once per image)…', percent: 40 });
-            const inputs = await processor(image) as Record<string, unknown>;
-            const embeddings = await (network as unknown as { get_image_embeddings: (inputs: unknown) => Promise<Record<string, unknown>> }).get_image_embeddings(inputs);
-            encoded = { image, inputs, embeddings };
-          }
-          onProgress?.({ phase: 'running', text: 'Selecting…', percent: 85 });
-          const prompt = await processor(image, {
-            input_points: [[points.map((point) => [point.x, point.y])]],
-            input_labels: [[points.map((point) => (point.positive ? 1 : 0))]],
-          }) as Record<string, unknown>;
-          const outputs = await network({
-            ...encoded.embeddings,
-            input_points: prompt.input_points,
-            input_labels: prompt.input_labels,
-          } as never) as { pred_masks: InstanceType<typeof transformers.Tensor>; iou_scores: InstanceType<typeof transformers.Tensor> };
-          const masks = await (processor as unknown as {
-            post_process_masks: (...args: unknown[]) => Promise<InstanceType<typeof transformers.Tensor>[]>;
-          }).post_process_masks(outputs.pred_masks, prompt.original_sizes, prompt.reshaped_input_sizes);
-          // Masks come as [1, point batch, candidates, H, W]; keep the best candidate.
-          const scores = outputs.iou_scores.data as Float32Array;
-          let best = 0;
-          for (let i = 1; i < scores.length; i += 1) if (scores[i] > scores[best]) best = i;
-          const all = masks[0].data as Uint8Array;
-          const size = image.width * image.height;
-          const mask = all.slice(best * size, (best + 1) * size);
-          const alpha = new Uint8ClampedArray(size);
-          for (let i = 0; i < size; i += 1) alpha[i] = mask[i] ? 255 : 0;
-          const cutout = image.clone().putAlpha(new transformers.RawImage(alpha, image.width, image.height, 1));
-          return { cutout, mask, width: image.width, height: image.height, score: scores[best] ?? 0, points };
-        };
-        return Object.assign(select, {
-          dispose: async () => { encoded = null; await network.dispose(); },
-        }) as unknown as LoadedPipeline;
-      }
-      if (task === 'background-removal') {
-        const processor = await transformers.AutoProcessor.from_pretrained(model, { revision });
-        const network = await transformers.AutoModel.from_pretrained(model, options);
-        // Exports name their tensors differently (input/output for RMBG and
-        // MODNet, input_image/output_image for BiRefNet), so read the session.
-        const session = (network as unknown as { sessions?: Record<string, { inputNames?: string[]; outputNames?: string[] }> })
-          .sessions?.model;
-        const inputName = session?.inputNames?.[0] ?? 'input';
-        const outputNames = session?.outputNames ?? [];
-        const outputName = ['output', 'output_image', 'alphas', 'logits'].find((name) => outputNames.includes(name))
-          ?? outputNames[outputNames.length - 1]
-          ?? 'output';
-        const removeBackground = async (image: RawImage): Promise<RawImage> => {
-          const { pixel_values } = await processor(image);
-          const outputs = await network({ [inputName]: pixel_values }) as Record<string, InstanceType<typeof transformers.Tensor>>;
-          let matte = outputs[outputName] ?? Object.values(outputs)[0];
-          // RMBG and MODNet return a 0–1 matte; BiRefNet returns logits.
-          const data = matte.data as Float32Array;
-          let low = Infinity;
-          let high = -Infinity;
-          for (let i = 0; i < data.length; i += 97) {
-            if (data[i] < low) low = data[i];
-            if (data[i] > high) high = data[i];
-          }
-          if (low < -0.01 || high > 1.01) matte = matte.sigmoid();
-          const first = (matte as unknown as Record<number, typeof matte>)[0];
-          const mask = await transformers.RawImage
-            .fromTensor(first.mul(255).to('uint8'))
-            .resize(image.width, image.height);
-          return image.clone().putAlpha(mask);
-        };
-        return Object.assign(removeBackground, {
-          dispose: async () => { await network.dispose(); },
-        });
-      }
-      const pipe = await transformers.pipeline(task as never, model as never, options);
-      return pipe as unknown as LoadedPipeline;
-    };
-
-    try {
-      return await tryLoad(device);
-    } catch (error) {
-      if (device === 'webgpu' && precision !== 'fp16') {
-        onProgress?.({
-          phase: 'loading',
-          text: 'WebGPU failed; retrying on the CPU/WASM backend…',
-        });
-        return tryLoad('wasm');
-      }
-      throw error;
-    }
-  })();
-
-  const entry = { promise, ready: false, lastUsed: Date.now() };
-  pipelineCache.set(key, entry);
-  // Vision models are hundreds of MB. Keep only the two most recently used
-  // pipelines so exploring tasks cannot pin gigabytes of sessions in memory.
-  if (pipelineCache.size > MAX_VISION_PIPELINES) {
-    const evictable = [...pipelineCache.entries()]
-      .filter(([entryKey, value]) => entryKey !== key && value.ready)
-      .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
-    for (const [entryKey, value] of evictable.slice(0, pipelineCache.size - MAX_VISION_PIPELINES)) {
-      pipelineCache.delete(entryKey);
-      void value.promise.then((loaded) => loaded.dispose?.()).catch(() => undefined);
-    }
-  }
-  void promise.then(
-    () => { entry.ready = true; },
-    () => { if (pipelineCache.get(key) === entry) pipelineCache.delete(key); },
-  );
-  return promise;
 }
 
 export interface RunVisionOptions extends VisionSelection {
@@ -575,119 +355,179 @@ export interface RunVisionOptions extends VisionSelection {
   points?: SelectPoint[];
 }
 
-export async function runVision(options: RunVisionOptions): Promise<VisionResult> {
-  const { task, image, onProgress } = options;
-  onProgress?.({ phase: 'loading', text: 'Preparing the vision model…' });
-  const pipe = await loadPipeline(options);
+/*
+ * Inference runs in vision-worker.ts so the page stays responsive (BiRefNet on
+ * WASM blocked it for 3 to 4 s per image). Mirage ("describe-scene") and
+ * browsers without module workers run vision-run.ts in the page.
+ */
 
-  onProgress?.({
-    phase: 'running',
-    text:
-      task === 'image-to-text'
-        ? 'Writing a caption…'
-        : task === 'depth-estimation'
-          ? 'Estimating depth…'
-          : task === 'image-classification'
-            ? 'Classifying the image…'
-            : 'Running inference…',
-  });
+type VisionRun = typeof import('./vision-run');
+let pageRun: VisionRun | null = null;
+let worker: Worker | null = null;
+let nextId = 0;
+let nextImageKey = 0;
+const imageKeys = new WeakMap<RawImage, number>();
+const loadedKeys = new Set<string>();
+const pending = new Map<number, {
+  resolve: (reply: Extract<VisionWorkerReply, { type: 'done' }>) => void;
+  reject: (error: Error) => void;
+  onProgress?: (progress: VisionProgress) => void;
+}>();
 
-  if (task === 'select-object') {
-    const points = options.points?.length
-      ? options.points
-      : [{ x: image.width / 2, y: image.height / 2, positive: true }];
-    const selection = (await (pipe as unknown as (image: RawImage, points: SelectPoint[]) => Promise<Omit<Extract<VisionResult, { kind: 'select' }>, 'kind'>>)(image, points));
-    onProgress?.({ phase: 'ready', text: 'Selection ready.', percent: 100 });
-    return { kind: 'select', ...selection };
-  }
-
-  if (task === 'describe-scene') {
-    const scene = (await pipe(image)) as MirageScene;
-    const count = scene.objects?.length ?? 0;
-    onProgress?.({ phase: 'ready', text: `${count} object${count === 1 ? '' : 's'} described.`, percent: 100 });
-    return { kind: 'scene', scene };
-  }
-
-  if (task === 'ocr') {
-    const lines = (await pipe(image)) as OcrLine[];
-    onProgress?.({ phase: 'ready', text: `${lines.length} line${lines.length === 1 ? '' : 's'} of text found.`, percent: 100 });
-    return { kind: 'ocr', lines };
-  }
-
-  if (task === 'background-removal') {
-    const output = (await pipe(image)) as RawImage;
-    onProgress?.({ phase: 'ready', text: 'Cutout ready.', percent: 100 });
-    return { kind: 'image', image: output, label: 'Transparent PNG' };
-  }
-
-  if (task === 'depth-estimation') {
-    const output = (await pipe(image)) as {
-      depth?: RawImage;
-      predicted_depth?: unknown;
-    };
-    if (!output.depth) throw new Error('The depth model returned no depth map.');
-    onProgress?.({ phase: 'ready', text: 'Depth map ready.', percent: 100 });
-    return { kind: 'depth', image: output.depth };
-  }
-
-  if (task === 'object-detection') {
-    const output = (await pipe(image, {
-      threshold: options.threshold ?? 0.5,
-      percentage: true,
-    })) as Array<{
-      label: string;
-      score: number;
-      box: { xmin: number; ymin: number; xmax: number; ymax: number };
-    }>;
-    const items = output
-      .map((item) => ({
-        label: item.label,
-        score: item.score,
-        xmin: item.box.xmin,
-        ymin: item.box.ymin,
-        xmax: item.box.xmax,
-        ymax: item.box.ymax,
-      }))
-      .sort((a, b) => b.score - a.score);
-    onProgress?.({
-      phase: 'ready',
-      text: `${items.length} object${items.length === 1 ? '' : 's'} found.`,
-      percent: 100,
-    });
-    return {
-      kind: 'boxes',
-      items,
-      labels: items.map((item) => ({ label: item.label, score: item.score })),
-    };
-  }
-
-  if (task === 'image-segmentation') {
-    const output = (await pipe(image)) as VisionSegment[];
-    const sorted = output.slice().sort((a, b) => b.score - a.score);
-    onProgress?.({
-      phase: 'ready',
-      text: `${sorted.length} segment${sorted.length === 1 ? '' : 's'} found.`,
-      percent: 100,
-    });
-    return {
-      kind: 'mask',
-      items: sorted,
-      labels: sorted.map((item) => ({ label: item.label, score: item.score })),
-    };
-  }
-
-  if (task === 'image-classification') {
-    const output = (await pipe(image, {
-      top_k: options.topK ?? 5,
-    })) as VisionLabel[];
-    onProgress?.({ phase: 'ready', text: 'Classification ready.', percent: 100 });
-    return { kind: 'labels', items: output };
-  }
-
-  const output = (await pipe(image, {
-    max_new_tokens: 64,
-  })) as Array<{ generated_text?: string }>;
-  const text = output[0]?.generated_text?.trim() ?? '';
-  onProgress?.({ phase: 'ready', text: 'Caption ready.', percent: 100 });
-  return { kind: 'text', text: text || 'No caption was generated.' };
+function runsInPage(task: VisionTaskId): boolean {
+  return task === 'describe-scene' || typeof Worker === 'undefined';
 }
+
+async function inPage(): Promise<VisionRun> {
+  pageRun ??= await import('./vision-run');
+  return pageRun;
+}
+
+function selectionKey({ task, model, device, precision = 'fp32' }: VisionSelection): string {
+  return `${task}:${model}:${device}:${precision}`;
+}
+
+function visionWorker(): Worker {
+  if (worker) return worker;
+  const created = new Worker(new URL('./vision-worker.ts', import.meta.url), { type: 'module', name: 'vision' });
+  created.onmessage = (event: MessageEvent<VisionWorkerReply>) => {
+    const reply = event.data;
+    const request = pending.get(reply.id);
+    if (!request) return;
+    if (reply.type === 'progress') {
+      request.onProgress?.(reply.progress);
+      return;
+    }
+    pending.delete(reply.id);
+    loadedKeys.clear();
+    for (const key of reply.loaded) loadedKeys.add(key);
+    if (reply.type === 'done') request.resolve(reply);
+    else {
+      const error = new Error(reply.message);
+      error.name = reply.name;
+      request.reject(error);
+    }
+  };
+  created.onerror = (event) => {
+    event.preventDefault();
+    created.terminate();
+    if (worker === created) worker = null;
+    loadedKeys.clear();
+    const error = new Error(event.message || 'The vision worker failed.');
+    for (const request of pending.values()) request.reject(error);
+    pending.clear();
+  };
+  worker = created;
+  return created;
+}
+
+function plainSelection({ task, model, device, precision }: VisionSelection): VisionWorkerSelection {
+  return { task, model, device, precision };
+}
+
+function post(
+  message: DistributiveOmit<VisionWorkerRequest, 'id'>,
+  onProgress?: (progress: VisionProgress) => void,
+): Promise<Extract<VisionWorkerReply, { type: 'done' }>> {
+  const target = visionWorker();
+  const id = ++nextId;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject, onProgress });
+    target.postMessage({ ...message, id } as VisionWorkerRequest);
+  });
+}
+
+export function isVisionModelLoaded(selection: VisionSelection): boolean {
+  if (runsInPage(selection.task)) return pageRun?.isVisionModelLoaded(selection) ?? false;
+  return loadedKeys.has(selectionKey(webgpuFailed ? onCpu(selection) : selection));
+}
+
+/**
+ * WebGPU failed in this session (an adapter exists but the device cannot be
+ * created, or it was lost). ONNX Runtime is left unusable in that worker, so
+ * the run is repeated on WASM in a fresh worker, and later WebGPU runs go
+ * straight to WASM.
+ */
+let webgpuFailed = false;
+
+function restartWorker(): void {
+  worker?.terminate();
+  worker = null;
+  loadedKeys.clear();
+  const error = new Error('The vision worker was restarted.');
+  for (const request of pending.values()) request.reject(error);
+  pending.clear();
+}
+
+function onCpu<T extends VisionSelection>(selection: T): T {
+  if (selection.device !== 'webgpu') return selection;
+  // FP16 is a WebGPU build; the CPU backend gets the FP32 weights.
+  return { ...selection, device: 'wasm', precision: selection.precision === 'fp16' ? 'fp32' : selection.precision };
+}
+
+async function withWasmFallback<T, S extends VisionSelection>(selection: S, run: (selection: S) => Promise<T>): Promise<T> {
+  if (webgpuFailed) return run(onCpu(selection));
+  try {
+    return await run(selection);
+  } catch (error) {
+    if (selection.device !== 'webgpu') throw error;
+    console.warn('WebGPU vision failed; retrying on WASM in a fresh worker.', error);
+    webgpuFailed = true;
+    selection.onProgress?.({ phase: 'loading', text: 'WebGPU failed; retrying on the CPU/WASM backend…' });
+    restartWorker();
+    return run(onCpu(selection));
+  }
+}
+
+export async function preloadVisionModel(selection: VisionSelection): Promise<void> {
+  if (runsInPage(selection.task)) {
+    await (await inPage()).preloadVisionModel(selection);
+    return;
+  }
+  await withWasmFallback(selection, async (chosen) => {
+    await post({ type: 'load', selection: plainSelection(chosen) }, chosen.onProgress);
+  });
+}
+
+export async function runVision(options: RunVisionOptions): Promise<VisionResult> {
+  if (runsInPage(options.task)) return (await inPage()).runVision(options);
+  return withWasmFallback(options, runInWorker);
+}
+
+async function runInWorker(options: RunVisionOptions): Promise<VisionResult> {
+  const { image } = options;
+  let imageKey = imageKeys.get(image);
+  if (imageKey === undefined) {
+    imageKey = ++nextImageKey;
+    imageKeys.set(image, imageKey);
+  }
+  // Copied, not transferred: the page keeps showing the source image.
+  const plain: PlainImage = { data: image.data as Uint8Array | Uint8ClampedArray, width: image.width, height: image.height, channels: image.channels };
+  const reply = await post({
+    type: 'run',
+    selection: plainSelection(options),
+    image: plain,
+    imageKey,
+    threshold: options.threshold,
+    topK: options.topK,
+    points: options.points,
+  }, options.onProgress);
+  return unpack(reply.result as VisionResult);
+}
+
+async function unpack(result: VisionResult): Promise<VisionResult> {
+  const { RawImage: Raw } = await import('@huggingface/transformers');
+  const raw = (value: unknown): RawImage => {
+    const image = value as PlainImage;
+    return new Raw(image.data, image.width, image.height, image.channels);
+  };
+  switch (result.kind) {
+    case 'image': return { ...result, image: raw(result.image) };
+    case 'depth': return { ...result, image: raw(result.image) };
+    case 'mask': return { ...result, items: result.items.map((item) => ({ ...item, mask: raw(item.mask) })) };
+    case 'select': return { ...result, cutout: raw(result.cutout) };
+    default: return result;
+  }
+}
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;

@@ -9,7 +9,7 @@
 import { sharedFfmpeg } from './audio-ffmpeg';
 import { asciiPreview, checksumsFor, headText, hexPreview, type FileChecksums } from './file-metadata';
 import { sharedMedia } from './media-router';
-import type { OcrLine } from './ocr';
+import type { OcrLine } from './ocr-client';
 import type { PdfMetadataResult, PdfPageImage } from './pdf-doc';
 import { createZip, uniqueNames } from './zip';
 
@@ -578,7 +578,8 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
     updateButtons();
     try {
       setStatus('Loading the local OCR model…');
-      const { loadOcr, runOcr } = await import('./ocr');
+      // PP-OCR runs in a worker; the page stays responsive between pages.
+      const { loadOcr, runOcr } = await import('./ocr-client');
       await loadOcr((loaded, total) => {
         setStatus(`Downloading OCR model · ${Math.round((loaded / total) * 100)}%`);
       });
