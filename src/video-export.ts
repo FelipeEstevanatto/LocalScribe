@@ -93,6 +93,7 @@ import {
   type ClipEffects,
 } from './video-effects';
 import { runPixelPassParallel } from './pixel-effects-pool';
+import { gpuPixelPassEnabled, runPixelPassGpu } from './pixel-effects-gpu';
 import { sharedMedia } from './media-router';
 
 export interface ExportVideoClip extends MergeVideo {
@@ -328,6 +329,19 @@ function renderClipFrame(
   const layerCtx = getLayer();
   drawTransformed(layerCtx, sourceWidth, sourceHeight, size, transform, effects, draw);
   const pass = pixelPassFor(effects);
+  if (pass && gpuPixelPassEnabled()) {
+    // Prototype (O8): the pass on the GPU, without reading pixels back.
+    const result = runPixelPassGpu(layerCtx.canvas, pass, effects.lut ? lutKey(effects.lut) : null);
+    if (result) {
+      layerCtx.save();
+      layerCtx.setTransform(1, 0, 0, 1, 0, 0);
+      layerCtx.globalCompositeOperation = 'copy';
+      layerCtx.drawImage(result, 0, 0);
+      layerCtx.restore();
+      compositeLayer(ctx, layerCtx, size, effects, state.opacity, motion.reveal);
+      return;
+    }
+  }
   if (pass) {
     // The per-pixel pass runs on worker threads, band by band; the source frame
     // is already drawn into the layer, so the caller may release it.

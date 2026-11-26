@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Export pixel pass: GPU vs CPU</title>
+</head>
+<body>
+  <p>Open from the dev server and run <code>await window.runPixelPassParity()</code>.</p>
+  <script type="module">
+    // The export pixel pass (chroma key, tone curve, LUT) on the GPU
+    // (src/pixel-effects-gpu.ts) against the CPU kernel on 1920x1080 frames.
+    // "composited" compares what the export shows: the layer over black.
+    import { pixelPassFor, normalizeEffects } from '/src/video-effects.ts';
+    import { runPixelPass } from '/src/pixel-effects-kernel.ts';
+    import { runPixelPassGpu } from '/src/pixel-effects-gpu.ts';
+    import { imageScores } from '/scripts/parity-metrics.js';
+
+    window.runPixelPassParity = async () => {
+  const W = 1920, H = 1080;
+  const lut33 = { name: 'warm', size: 33, data: [] };
+  for (let b = 0; b < 33; b++) for (let g = 0; g < 33; g++) for (let r = 0; r < 33; r++) lut33.data.push(Math.min(1, r / 32 * 1.04), Math.pow(g / 32, 0.9), Math.max(0, b / 32 * 0.96));
+  const invert = { name: 'invert', size: 4, data: [] };
+  for (let b = 0; b < 4; b++) for (let g = 0; g < 4; g++) for (let r = 0; r < 4; r++) invert.data.push(1 - r / 3, 1 - g / 3, 1 - b / 3);
+  function frame(kind) {
+    const c = new OffscreenCanvas(W, H); const x = c.getContext('2d');
+    if (kind === 'green') {
+      x.fillStyle = '#00ff00'; x.fillRect(0, 0, W, H);
+      const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#ff3366'); g.addColorStop(0.5, '#33ccff'); g.addColorStop(1, '#ffee00');
+      x.fillStyle = g; x.beginPath(); x.ellipse(W * 0.6, H * 0.5, 520, 380, 0.3, 0, Math.PI * 2); x.fill();
+      // soft edge between key and subject
+      const r = x.createRadialGradient(W * 0.25, H * 0.5, 20, W * 0.25, H * 0.5, 300); r.addColorStop(0, '#20e040'); r.addColorStop(1, '#00ff00'); x.fillStyle = r; x.fillRect(0, 0, W * 0.45, H);
+    } else if (kind === 'noise') {
+      const img = x.createImageData(W, H); let s = 7;
+      for (let i = 0; i < img.data.length; i += 4) { s = (s * 1103515245 + 12345) >>> 0; img.data[i] = s >>> 24; img.data[i + 1] = (s >>> 16) & 255; img.data[i + 2] = (s >>> 8) & 255; img.data[i + 3] = 255; }
+      x.putImageData(img, 0, 0);
+    } else if (kind === 'alpha') {
+      const g = x.createLinearGradient(0, 0, W, 0); g.addColorStop(0, 'rgba(0,255,0,0.2)'); g.addColorStop(0.5, 'rgba(255,128,0,0.7)'); g.addColorStop(1, 'rgba(30,60,255,1)');
+      x.fillStyle = g; x.fillRect(0, 0, W, H);
+    } else {
+      const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#0f172a'); g.addColorStop(0.5, '#38bdf8'); g.addColorStop(1, '#f59e0b');
+      x.fillStyle = g; x.fillRect(0, 0, W, H);
+      ['#ef4444', '#22c55e', '#3b82f6', '#eab308', '#a855f7', '#ffffff', '#000000'].forEach((c2, i) => { x.fillStyle = c2; x.fillRect(80 + i * 250, 80, 180, 180); });
+      x.fillStyle = '#f8fafc'; x.font = 'bold 140px sans-serif'; x.fillText('LOCALSCRIBE', 120, 800);
+    }
+    return c;
+  }
+  const cases = [
+    ['chroma', 'green', { chroma: { enabled: true, color: '#00ff00', tolerance: 0.24, softness: 0.12 } }],
+    ['chroma-wide-soft', 'green', { chroma: { enabled: true, color: '#00ff00', tolerance: 0.6, softness: 0.4 } }],
+    ['tone', 'pattern', { curve: { shadows: 22, midtones: -18, highlights: 14 } }],
+    ['lut33', 'pattern', { lut: lut33 }],
+    ['lut-invert', 'pattern', { lut: invert }],
+    ['tone+lut33', 'noise', { curve: { shadows: 8, midtones: 5, highlights: -6 }, lut: lut33 }],
+    ['all', 'green', { chroma: { enabled: true, color: '#00ff00', tolerance: 0.3, softness: 0.1 }, curve: { shadows: 8, midtones: -6, highlights: 5 }, lut: lut33 }],
+    ['all-alpha', 'alpha', { chroma: { enabled: true, color: '#00ff00', tolerance: 0.3, softness: 0.2 }, curve: { shadows: 8, midtones: -6, highlights: 5 }, lut: lut33 }],
+    ['all-noise', 'noise', { chroma: { enabled: true, color: '#00ff00', tolerance: 0.3, softness: 0.2 }, curve: { shadows: 8, midtones: -6, highlights: 5 }, lut: lut33 }],
+  ];
+  const out = [];
+  for (const [name, kind, effects] of cases) {
+    const src = frame(kind);
+    const pass = pixelPassFor(normalizeEffects(effects));
+    // CPU: getImageData -> kernel -> putImageData -> read back.
+    const cpuCanvas = new OffscreenCanvas(W, H); const cpu = cpuCanvas.getContext('2d', { willReadFrequently: true });
+    cpu.drawImage(src, 0, 0);
+    let t = performance.now();
+    const img = cpu.getImageData(0, 0, W, H); runPixelPass(img.data, pass); cpu.putImageData(img, 0, 0);
+    const cpuMs = performance.now() - t;
+    const a = cpu.getImageData(0, 0, W, H).data;
+    // GPU: layer -> pass -> drawImage back.
+    const gpuCanvas = new OffscreenCanvas(W, H); const gpu = gpuCanvas.getContext('2d', { willReadFrequently: true });
+    gpu.drawImage(src, 0, 0);
+    const times = [];
+    let resultCanvas = null;
+    for (let i = 0; i < 6; i++) {
+      t = performance.now();
+      resultCanvas = runPixelPassGpu(gpuCanvas, pass, effects.lut ? effects.lut.name : null);
+      const sink = new OffscreenCanvas(W, H).getContext('2d'); sink.drawImage(resultCanvas, 0, 0); sink.getImageData(0, 0, 1, 1);
+      times.push(performance.now() - t);
+    }
+    const back = new OffscreenCanvas(W, H).getContext('2d', { willReadFrequently: true });
+    back.drawImage(resultCanvas, 0, 0);
+    const b = back.getImageData(0, 0, W, H).data;
+    // What the export shows: the layer composited over black (alpha applied).
+    const over = (data) => { const o = new Uint8ClampedArray(data.length); for (let i = 0; i < data.length; i += 4) { const al = data[i + 3] / 255; o[i] = Math.round(data[i] * al); o[i + 1] = Math.round(data[i + 1] * al); o[i + 2] = Math.round(data[i + 2] * al); o[i + 3] = 255; } return o; };
+    const ca = over(a), cb = over(b);
+    let cmax = 0, cdiff = 0;
+    for (let i = 0; i < ca.length; i += 4) { let pm = 0; for (let c = 0; c < 3; c++) pm = Math.max(pm, Math.abs(ca[i + c] - cb[i + c])); if (pm) cdiff++; if (pm > cmax) cmax = pm; }
+    const composited = { diffPixels: cdiff, maxRgb: cmax, ...imageScores(ca, cb, W, H) };
+    let exact = 0, max = 0, maxAlpha = 0, diffPixels = 0;
+    for (let i = 0; i < a.length; i += 4) {
+      let pm = 0;
+      for (let c = 0; c < 3; c++) { const d = Math.abs(a[i + c] - b[i + c]); if (d > pm) pm = d; }
+      const da = Math.abs(a[i + 3] - b[i + 3]);
+      if (pm > max) max = pm; if (da > maxAlpha) maxAlpha = da;
+      if (pm === 0 && da === 0) exact++; else diffPixels++;
+    }
+    times.sort((p, q) => p - q);
+    out.push({ name, exactPct: +(100 * exact / (W * H)).toFixed(3), diffPixels, maxRgb: max, maxAlpha, raw: imageScores(a, b, W, H), composited, cpuMs: +cpuMs.toFixed(1), gpuMs: +times[3].toFixed(1) });
+  }
+  return out;
+    };
+  </script>
+</body>
+</html>
