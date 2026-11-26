@@ -388,7 +388,13 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
   let sourceName = 'document';
   let sourceKind: 'pdf' | 'image' = 'image';
   let pdfFile: File | null = null;
+  /** Pages in the PDF; only the first MAX_PDF_PAGES are opened. */
+  let pdfPageCount = 0;
   let busy = false;
+
+  /** "first 30 of 200 pages" when the PDF was cut to MAX_PDF_PAGES, else ''. */
+  const pageCapNote = (): string =>
+    sourceKind === 'pdf' && pdfPageCount > pages.length ? `first ${pages.length} of ${pdfPageCount} pages` : '';
 
   const currentPage = (): DocumentPage | null => pages[index] ?? null;
 
@@ -547,10 +553,18 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
       if (pdf) {
         setStatus('Rendering the first PDF page locally…');
         const { renderPdfPages } = await import('./pdf-doc');
-        const rendered = await renderPdfPages(file, { maxPages: MAX_PDF_PAGES, firstPageOnly: true });
+        pdfPageCount = 0;
+        const rendered = await renderPdfPages(file, {
+          maxPages: MAX_PDF_PAGES,
+          firstPageOnly: true,
+          onPageCount: (count) => { pdfPageCount = count; },
+        });
         if (!rendered.length) throw new Error('The PDF has no pages.');
         pages = rendered.map((image) => ({ image, lines: [], boxes: [] }));
-        meta.textContent = `${file.name} · ${pages.length} page${pages.length === 1 ? '' : 's'} · rendered locally`;
+        const cap = pageCapNote();
+        meta.textContent = cap
+          ? `${file.name} · showing the ${cap} · rendered locally`
+          : `${file.name} · ${pages.length} page${pages.length === 1 ? '' : 's'} · rendered locally`;
       } else {
         const image = await createImageBitmap(file);
         const width = image.width;
@@ -560,7 +574,14 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
         meta.textContent = `${file.name} · ${width} × ${height} · ${formatSize(file.size)}`;
       }
       await loadPage(0);
-      setStatus(sourceKind === 'pdf' ? 'PDF ready. Run OCR or draw redaction boxes.' : 'Image ready. Run OCR or draw redaction boxes.', 'good');
+      const cap = pageCapNote();
+      if (cap) {
+        // Say it up front: OCR, PII selection and the redacted PDF cover only
+        // these pages, and the export must not look like the whole document.
+        setStatus(`PDF ready. Run OCR or draw redaction boxes. Only the ${cap} are open; the rest are not scanned or exported.`, 'normal');
+      } else {
+        setStatus(sourceKind === 'pdf' ? 'PDF ready. Run OCR or draw redaction boxes.' : 'Image ready. Run OCR or draw redaction boxes.', 'good');
+      }
     } catch (error) {
       pages = [];
       bitmap?.close();
@@ -751,9 +772,14 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
       const rendered = [];
       for (const page of pages) rendered.push(await pdfPageImage(await pageWithRedactions(page)));
       const blob = await imagesToPdf(rendered);
-      options.download(blob, `${sourceName}-redacted.pdf`);
+      const cap = pageCapNote();
+      options.download(blob, cap ? `${sourceName}-redacted-pages-1-${pages.length}.pdf` : `${sourceName}-redacted.pdf`);
       const redacted = pages.filter((page) => page.boxes.length).length;
-      setStatus(`Redacted PDF downloaded: ${redacted} of ${pages.length} page${pages.length === 1 ? '' : 's'} had boxes. The original text layer and metadata are gone.`, 'good');
+      setStatus(
+        `Redacted PDF downloaded: ${redacted} of ${pages.length} page${pages.length === 1 ? '' : 's'} had boxes. The original text layer and metadata are gone.` +
+          (cap ? ` It holds only the ${cap}.` : ''),
+        cap ? 'normal' : 'good',
+      );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error), 'error');
     } finally {

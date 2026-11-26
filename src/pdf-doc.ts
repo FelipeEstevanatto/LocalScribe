@@ -56,7 +56,14 @@ export async function renderPdfPage(
 
 export async function renderPdfPages(
   file: Blob,
-  options: { maxPages?: number; maxSide?: number; signal?: AbortSignal; firstPageOnly?: boolean } = {},
+  options: {
+    maxPages?: number;
+    maxSide?: number;
+    signal?: AbortSignal;
+    firstPageOnly?: boolean;
+    /** Called with the document's real page count, which may exceed maxPages. */
+    onPageCount?: (count: number) => void;
+  } = {},
 ): Promise<PdfPageImage[]> {
   const maxPages = Math.max(1, Math.min(60, options.maxPages ?? 30));
   const maxSide = Math.max(600, options.maxSide ?? 1800);
@@ -64,6 +71,7 @@ export async function renderPdfPages(
   const pdfDocument = await loadingTask.promise;
   const pages: PdfPageImage[] = [];
   try {
+    options.onPageCount?.(pdfDocument.numPages);
     const count = Math.min(pdfDocument.numPages, maxPages);
     const renderCount = options.firstPageOnly ? 1 : count;
     for (let number = 1; number <= renderCount; number += 1) {
