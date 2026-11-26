@@ -5236,39 +5236,58 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
       if (clip.strip && !clip.image && !builtStrips.has(key)) builtStrips.set(key, clip.strip);
       if (clip.peaks && !builtPeaks.has(key)) builtPeaks.set(key, clip.peaks);
     }
+    // Object URLs are kept when the same clip (or asset) still points at the
+    // same file: creating one per clip on every undo was 13% of the restore on
+    // large projects. Each URL keeps a single owner, so deleting another clip
+    // never revokes it. URLs nothing reuses are revoked at the end.
+    const oldUrls = new Map<string, { blob: Blob; url: string }>();
+    const keep = (key: string, blob: Blob | undefined, url: string | undefined): void => {
+      if (blob && url) oldUrls.set(key, { blob, url });
+    };
     for (const clip of videos) {
-      URL.revokeObjectURL(clip.url);
-      if (clip.proxyUrl) URL.revokeObjectURL(clip.proxyUrl);
+      keep(`v${clip.id}`, clip.file, clip.url);
+      keep(`vp${clip.id}`, clip.proxy?.blob, clip.proxyUrl);
     }
     for (const clip of audios) {
       disposeAudio(clip);
-      URL.revokeObjectURL(clip.url);
+      keep(`a${clip.id}`, clip.file, clip.url);
     }
     for (const asset of assets) {
-      URL.revokeObjectURL(asset.url);
-      if (asset.proxyUrl) URL.revokeObjectURL(asset.proxyUrl);
+      keep(`s${asset.id}`, asset.file, asset.url);
+      keep(`sp${asset.id}`, asset.proxy?.blob, asset.proxyUrl);
     }
+    const urlFor = (key: string, blob: Blob): string => {
+      const old = oldUrls.get(key);
+      if (old && old.blob === blob) {
+        oldUrls.delete(key);
+        return old.url;
+      }
+      return URL.createObjectURL(blob);
+    };
     assets = (state.assets ?? []).map((asset) => {
-      const url = URL.createObjectURL(asset.file);
+      const url = urlFor(`s${asset.id}`, asset.file);
       return {
         ...asset,
         url,
         strip: asset.kind === 'image' ? url : asset.strip ?? builtStrips.get(asset.key) ?? null,
         peaks: asset.peaks ?? builtPeaks.get(asset.key) ?? asset.peaks,
-        proxyUrl: asset.proxy ? URL.createObjectURL(asset.proxy.blob) : '',
+        proxyUrl: asset.proxy ? urlFor(`sp${asset.id}`, asset.proxy.blob) : '',
       };
     });
+    // First asset per media key, like assets.find().
+    const assetsByKey = new Map<string, (typeof assets)[number]>();
+    for (const asset of assets) if (!assetsByKey.has(asset.key)) assetsByKey.set(asset.key, asset);
     videos = state.videos.map((clip) => {
       const key = mediaKey(clip.file);
-      const asset = assets.find((entry) => entry.key === key);
-      const url = URL.createObjectURL(clip.file);
+      const asset = assetsByKey.get(key);
+      const url = urlFor(`v${clip.id}`, clip.file);
       return {
         ...clip,
         transform: clipTransform(clip.transform),
         effects: normalizeEffects(clip.effects),
         animation: normalizeAnimation(clip.animation),
         proxy: clip.proxy,
-        proxyUrl: clip.proxy ? URL.createObjectURL(clip.proxy.blob) : '',
+        proxyUrl: clip.proxy ? urlFor(`vp${clip.id}`, clip.proxy.blob) : '',
         url,
         strip: asset?.kind === 'image' ? asset.url : clip.image ? url : clip.strip ?? builtStrips.get(key) ?? null,
         peaks: clip.peaks ?? builtPeaks.get(key) ?? null,
@@ -5292,9 +5311,10 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
     transcriptEdits = state.transcriptEdits.map((span) => ({ ...span }));
     mergeTranscriptEdits();
     audios = state.audios.map((clip) => {
-      const url = URL.createObjectURL(clip.file);
+      const url = urlFor(`a${clip.id}`, clip.file);
       return { ...clip, sourceTrack: restoreSourceTrack(clip), url, ...makeAudio(url) };
     });
+    for (const { url } of oldUrls.values()) URL.revokeObjectURL(url);
     for (const clip of videos) if (clip.effects.speed !== 1 || clip.effects.speedPoints?.length) syncRetimeAudio(clip);
     selected = state.selected ? { ...state.selected } : null;
     time = state.time;
