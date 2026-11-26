@@ -263,6 +263,8 @@ test('loudness normalization and WebM soundtracks use the right filters and cont
     keepOriginal: true, originalVolume: 1, format: 'mp4', normalize: 'podcast',
   })!;
   expect(graphOf(normalized.args)).toContain('loudnorm=I=-16:TP=-1.5:LRA=11');
+  // loudnorm outputs 192 kHz; the export goes back to 48 kHz before the limiter.
+  expect(graphOf(normalized.args)).toContain('loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000,alimiter=');
   expect(graphOf(normalized.args)).toContain('alimiter=limit=0.95:level=false');
 
   const webm = buildAudioMixPlan([{ duration: 10, probe: { ...h264, videoCodec: 'vp9' } }], [], {

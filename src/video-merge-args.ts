@@ -646,8 +646,11 @@ export function buildAudioMixPlan(
     ? `${mix.join('')}amix=inputs=${mix.length}:duration=longest:normalize=0:dropout_transition=0`
     : `${mix[0]}anull`;
   const post: string[] = [];
-  if (settings.normalize === 'podcast') post.push('loudnorm=I=-16:TP=-1.5:LRA=11');
-  else if (settings.normalize === 'social') post.push('loudnorm=I=-14:TP=-1:LRA=11');
+  // loudnorm works at 192 kHz internally and outputs at that rate, which made
+  // every loudness export a 96 kHz AAC track and cost 20 to 25 s per export.
+  // Resample back to 48 kHz like every other export.
+  if (settings.normalize === 'podcast') post.push('loudnorm=I=-16:TP=-1.5:LRA=11', 'aresample=48000');
+  else if (settings.normalize === 'social') post.push('loudnorm=I=-14:TP=-1:LRA=11', 'aresample=48000');
   // Limit once, after every gain stage, so a single clip at 200% cannot clip.
   post.push('alimiter=limit=0.95:level=false');
   graph.push(`${head}${post.map((filter) => `,${filter}`).join('')},apad,atrim=end=${t(total)}[aout]`);
