@@ -7,7 +7,8 @@
  */
 
 import { sharedFfmpeg } from './audio-ffmpeg';
-import { asciiPreview, checksumsFor, headText, hexPreview, type FileChecksums } from './file-metadata';
+import { checksumsOffThread } from './checksum-client';
+import { asciiPreview, headText, hexPreview, type FileChecksums } from './file-metadata';
 import { sharedMedia } from './media-router';
 import type { OcrLine } from './ocr-client';
 import type { PdfMetadataResult, PdfPageImage } from './pdf-doc';
@@ -1003,7 +1004,8 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
       const head = new Uint8Array(await file.slice(0, 64).arrayBuffer());
       const magic = magicType(head);
       const signature = `${magic} (${hexPreview(head.slice(0, 16))})`;
-      const checksums = await checksumsFor(file).catch(() => null);
+      // Hashing up to 100 MB blocked the page for about a second; it runs in a worker.
+      const checksums = await checksumsOffThread(file).catch(() => null);
       const groups: MetadataGroup[] = [];
       const tags: MetadataTag[] = [];
       addMetadataGroup(groups, 'File', [
