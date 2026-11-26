@@ -1670,6 +1670,8 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
   let historyLabels: string[] = [];
   let historyDetails: string[] = [];
   let historySizes: number[] = [];
+  // signature() of each history entry, computed once at commit.
+  let historySignatures: string[] = [];
   let historyBytesTotal = 0;
   const MAX_HISTORY_BYTES = 32 * 1024 * 1024;
   let historyIndex = -1;
@@ -2708,13 +2710,15 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
   }
 
   function projectFingerprint(): string {
-    fingerprintCache ??= JSON.stringify({
-      state: signature(snapshot()),
+    // Timeline edits reach the fingerprint through commit(), so the committed
+    // signature stands for the timeline; the live snapshot is signed only when
+    // there is no history yet. Name, settings and media are read live (cheap).
+    const state = historySignatures[historyIndex] ?? (fingerprintCache ??= signature(snapshot()));
+    return state + ' ' + JSON.stringify({
       assets: assets.map((asset) => asset.key),
       name: projectName.value.trim(),
       settings: projectSettings(),
     });
-    return fingerprintCache;
   }
 
   function invalidateFingerprint(): void {
@@ -3671,13 +3675,15 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
         `Saved project · ${videos.length} clip${videos.length === 1 ? '' : 's'} · ` +
         `${audios.length} audio${audios.length === 1 ? '' : 's'}`,
       ];
-      historySizes = [signature(openedState).length * 2];
+      historySignatures = [signature(openedState)];
+      historySizes = [historySignatures[0].length * 2];
       historyBytesTotal = historySizes[0];
       historyIndex = 0;
       updateHistoryButtons();
       renderMediaPool();
       render();
       seek(Math.min(time, timelineEnd()));
+      invalidateFingerprint();
       savedFingerprint = projectFingerprint();
       scheduleAudioMix();
       scheduleAutoProxy();
@@ -3772,8 +3778,10 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
     historyLabels = [];
     historyDetails = [];
     historySizes = [];
+    historySignatures = [];
     historyBytesTotal = 0;
     historyIndex = -1;
+    invalidateFingerprint();
     window.clearTimeout(audioMixTimer);
     audioMixTimer = 0;
     audioMixBuffer = null;
@@ -5173,7 +5181,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
     const previous = historyIndex >= 0 ? history[historyIndex] : undefined;
     const state = snapshot();
     const stateSignature = signature(state);
-    if (previous && signature(previous) === stateSignature) {
+    if (previous && historySignatures[historyIndex] === stateSignature) {
       updateHistoryButtons();
       return;
     }
@@ -5182,11 +5190,13 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
     historyLabels = historyLabels.slice(0, historyIndex + 1);
     historyDetails = historyDetails.slice(0, historyIndex + 1);
     historySizes = historySizes.slice(0, historyIndex + 1);
+    historySignatures = historySignatures.slice(0, historyIndex + 1);
     historyBytesTotal = historySizes.reduce((sum, size) => sum + size, 0);
     history.push(state);
     historyLabels.push(label || 'Edit');
     historyDetails.push(detail);
     historySizes.push(stateSignature.length * 2);
+    historySignatures.push(stateSignature);
     historyBytesTotal += stateSignature.length * 2;
     while (
       history.length > 1 &&
@@ -5195,6 +5205,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
       history.shift();
       historyLabels.shift();
       historyDetails.shift();
+      historySignatures.shift();
       historyBytesTotal -= historySizes.shift() ?? 0;
     }
     historyIndex = history.length - 1;
@@ -5207,6 +5218,7 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
 
   function restore(state: Snapshot): void {
     restoring = true;
+    invalidateFingerprint();
     pause();
     // A snapshot taken before a filmstrip or waveform finished building holds
     // null for it. Keep whatever the current session has already built, keyed
@@ -8618,7 +8630,6 @@ export function setupVideoMerge(root: HTMLElement, options: MergeOptions) {
   function renderTimeline(): void {
     syncClipSelection();
     invalidateTimelineDerived();
-    invalidateFingerprint();
     timelineBox.classList.toggle('video-compact-tracks', compactTracks);
     timelineBox.style.setProperty('--vt-video-row', `${videoRowHeight()}px`);
     timelineBox.style.setProperty('--vt-audio-row', `${audioRowHeight()}px`);
