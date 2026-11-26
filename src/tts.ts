@@ -9,16 +9,13 @@ import { fetchWithProgress } from './transfer';
  * uploaded. The ONNX graph runs on the app's existing ONNX Runtime.
  */
 
-import kokoroFactoryUrl from '../node_modules/kokoro-js/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url';
-import kokoroWasmUrl from '../node_modules/kokoro-js/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm?url';
-import kokoroJsepFactoryUrl from '../node_modules/kokoro-js/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs?url';
-import kokoroJsepWasmUrl from '../node_modules/kokoro-js/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm?url';
 import { getOrtForTts, type OrtModule } from './ort-runtime';
 import {
   phonemizeFast,
   prepareFastPhonemizer,
   type Phonemes,
 } from './phonemizer';
+import type { KokoroWorkerReply, KokoroWorkerRequest } from './kokoro-worker';
 
 const VOICE_ROOT = new URL('tiny-voca/', document.baseURI).href;
 const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
@@ -588,36 +585,6 @@ export class TinyVocaEngine {
   }
 }
 
-interface KokoroAudio {
-  audio: Float32Array;
-  sampling_rate: number;
-}
-
-type KokoroModule = {
-  KokoroTTS: {
-    from_pretrained: (
-      model: string,
-      options: {
-        dtype: string;
-        device: string;
-        progress_callback?: (event: {
-          status?: string;
-          file?: string;
-          loaded?: number;
-          total?: number;
-        }) => void;
-      },
-    ) => Promise<{
-      model: { dispose: () => Promise<void> };
-      generate: (
-        text: string,
-        options: { voice: string; speed: number },
-      ) => Promise<KokoroAudio>;
-    }>;
-  };
-  env: { wasmPaths: unknown };
-};
-
 export type KokoroMode = 'wasm' | 'webgpu' | 'wasm-q8';
 
 /**
@@ -642,31 +609,85 @@ export function raceAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise
   });
 }
 
+interface KokoroRequest {
+  resolve: (reply: Extract<KokoroWorkerReply, { type: 'done' }>) => void;
+  reject: (error: Error) => void;
+  onDownload?: (reply: Extract<KokoroWorkerReply, { type: 'download' }>) => void;
+}
+
+/**
+ * Kokoro (kokoro-js) runs in `kokoro-worker.ts`; this class keeps the page-side
+ * API. Generation used to freeze the page for the whole run (about 9 s per 100
+ * characters on WASM); now the page stays responsive and Cancel works between
+ * sentences.
+ */
 export class KokoroEngine {
-  private tts: Awaited<
-    ReturnType<KokoroModule['KokoroTTS']['from_pretrained']>
-  > | null = null;
+  private worker: Worker | null = null;
+  private loaded = false;
   private loading: Promise<void> | null = null;
   private pending: Promise<unknown> | null = null;
+  private nextId = 0;
+  private readonly requests = new Map<number, KokoroRequest>();
   constructor(private readonly mode: KokoroMode = 'wasm') {}
 
   get isLoaded(): boolean {
-    return Boolean(this.tts);
+    return this.loaded;
+  }
+
+  private kokoroWorker(): Worker {
+    if (this.worker) return this.worker;
+    const worker = new Worker(new URL('./kokoro-worker.ts', import.meta.url), { type: 'module', name: 'kokoro' });
+    worker.onmessage = (event: MessageEvent<KokoroWorkerReply>) => {
+      const reply = event.data;
+      const request = this.requests.get(reply.id);
+      if (!request) return;
+      if (reply.type === 'download') {
+        request.onDownload?.(reply);
+        return;
+      }
+      this.requests.delete(reply.id);
+      if (reply.type === 'done') request.resolve(reply);
+      else {
+        const error = new Error(reply.message);
+        error.name = reply.name;
+        request.reject(error);
+      }
+    };
+    worker.onerror = (event) => {
+      event.preventDefault();
+      this.fail(new Error(event.message || 'The Kokoro worker failed.'));
+    };
+    this.worker = worker;
+    return worker;
+  }
+
+  private fail(error: Error): void {
+    for (const request of this.requests.values()) request.reject(error);
+    this.requests.clear();
+    this.worker?.terminate();
+    this.worker = null;
+    this.loaded = false;
+  }
+
+  private request(
+    message: DistributiveOmit<KokoroWorkerRequest, 'id'>,
+    onDownload?: KokoroRequest['onDownload'],
+  ): Promise<Extract<KokoroWorkerReply, { type: 'done' }>> {
+    const worker = this.kokoroWorker();
+    const id = ++this.nextId;
+    return new Promise((resolve, reject) => {
+      this.requests.set(id, { resolve, reject, onDownload });
+      worker.postMessage({ ...message, id } as KokoroWorkerRequest);
+    });
   }
 
   async load(onProgress?: (progress: TtsProgress) => void): Promise<void> {
-    if (this.tts) return;
+    if (this.loaded) return;
     if (this.loading) return this.loading;
 
     const device = this.mode === 'webgpu' ? 'webgpu' : 'wasm';
     const dtype = this.mode === 'wasm-q8' ? 'q8' : 'fp32';
     this.loading = (async () => {
-      const module = (await import('kokoro-js')) as unknown as KokoroModule;
-      module.env.wasmPaths =
-        device === 'webgpu'
-          ? { wasm: kokoroJsepWasmUrl, mjs: kokoroJsepFactoryUrl }
-          : { wasm: kokoroWasmUrl, mjs: kokoroFactoryUrl };
-
       onProgress?.({
         phase: 'runtime',
         text:
@@ -676,25 +697,20 @@ export class KokoroEngine {
       });
 
       const files = new Map<string, { loaded: number; total: number }>();
-      this.tts = await module.KokoroTTS.from_pretrained(KOKORO_MODEL, {
-        dtype,
-        device,
-        progress_callback: (event) => {
-          if (event.status !== 'progress' && event.status !== 'done') return;
-          const file = event.file ?? 'Kokoro model';
-          const previous = files.get(file);
-          const total = Number(event.total) || previous?.total || 0;
-          const loaded = event.status === 'done' ? total : Number(event.loaded) || 0;
-          files.set(file, { loaded, total });
-          let sumLoaded = 0;
-          let sumTotal = 0;
-          for (const entry of files.values()) {
-            sumLoaded += entry.loaded;
-            sumTotal += entry.total;
-          }
-          onProgress?.({ phase: 'model', text: 'Downloading Kokoro', loaded: sumLoaded, total: sumTotal });
-        },
+      await this.request({ type: 'load', model: KOKORO_MODEL, device, dtype }, (event) => {
+        const previous = files.get(event.file);
+        const total = event.total || previous?.total || 0;
+        const loaded = event.status === 'done' ? total : event.loaded;
+        files.set(event.file, { loaded, total });
+        let sumLoaded = 0;
+        let sumTotal = 0;
+        for (const entry of files.values()) {
+          sumLoaded += entry.loaded;
+          sumTotal += entry.total;
+        }
+        onProgress?.({ phase: 'model', text: 'Downloading Kokoro', loaded: sumLoaded, total: sumTotal });
       });
+      this.loaded = true;
     })().finally(() => {
       this.loading = null;
     });
@@ -714,8 +730,6 @@ export class KokoroEngine {
     // Runtime. Wait for it so two runs never share the session at once.
     await this.pending?.catch(() => undefined);
     await this.load();
-    const tts = this.tts;
-    if (!tts) throw new Error('The Kokoro model is not loaded yet.');
 
     const list = sentences(finished(text));
     if (!list.length) throw new Error('Type some English text to speak.');
@@ -731,7 +745,8 @@ export class KokoroEngine {
       }
 
       onProgress?.(index, list.length);
-      const run = tts.generate(list[index], { voice, speed });
+      const run = this.request({ type: 'generate', text: list[index], voice, speed })
+        .then((reply) => ({ audio: reply.audio ?? new Float32Array(0), sampling_rate: reply.sampleRate ?? 0 }));
       this.pending = run;
       const audio = await raceAbort(run, signal);
       this.pending = null;
@@ -761,8 +776,13 @@ export class KokoroEngine {
   }
 
   async dispose(): Promise<void> {
-    const tts = this.tts;
-    this.tts = null;
-    await tts?.model.dispose().catch(() => undefined);
+    const worker = this.worker;
+    if (!worker) return;
+    await this.request({ type: 'dispose' }).catch(() => undefined);
+    worker.terminate();
+    if (this.worker === worker) this.worker = null;
+    this.loaded = false;
   }
 }
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
