@@ -39,6 +39,8 @@ export function unscannedPages(pages: readonly { scanned?: boolean }[]): number[
 }
 
 const MAX_PDF_PAGES = 30;
+/** Above this a PNG page is photographic (text pages compress to well under it). */
+const PNG_BYTES_PER_PIXEL_LIMIT = 0.6;
 const PII = /(?:\b[\w.+-]+@[\w.-]+\.\w{2,}\b)|(?:\+?\d[\d ().-]{7,}\d)|(?:\b(?:\d[ -]*?){13,19}\b)|(?:\b(?:iban|ssn|passport|account|routing|tax id)\b)/i;
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif']);
 const MEDIA_EXTENSIONS = new Set(['mp3', 'm4a', 'aac', 'wav', 'flac', 'ogg', 'oga', 'opus', 'weba', 'webm', 'mp4', 'm4v', 'mov', 'mkv', 'avi', 'wmv']);
@@ -698,6 +700,31 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
     return { blob: await toBlob(output), width: output.width, height: output.height };
   }
 
+  /**
+   * The page as the PDF stores it. Photographic pages (scans, photos) are
+   * stored as JPEG: as PNG a 30-page scan made a 79 MB PDF and took 47 s.
+   * Rendered text pages stay PNG, which is smaller and sharp for them.
+   * Redaction boxes are drawn before encoding, so nothing under them survives.
+   */
+  async function pdfPageImage(page: { blob: Blob; width: number; height: number }): Promise<{ blob: Blob; width: number; height: number }> {
+    const pixels = Math.max(1, page.width * page.height);
+    if (page.blob.type === 'image/jpeg') return page;
+    if (page.blob.type === 'image/png' && page.blob.size / pixels <= PNG_BYTES_PER_PIXEL_LIMIT) return page;
+    const source = await createImageBitmap(page.blob);
+    try {
+      const canvas = canvasFor(source.width, source.height);
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Could not create the PDF page.');
+      // JPEG has no alpha: flatten onto white like a printed page.
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(source, 0, 0);
+      return { blob: await toBlob(canvas, 'image/jpeg', 0.9), width: canvas.width, height: canvas.height };
+    } finally {
+      source.close();
+    }
+  }
+
   async function downloadPng(): Promise<void> {
     const page = currentPage();
     if (!page) return;
@@ -722,7 +749,7 @@ export function setupDocumentStudio(root: HTMLElement, options: DocumentOptions)
       setStatus('Building the redacted PDF…');
       const { imagesToPdf } = await import('./pdf-doc');
       const rendered = [];
-      for (const page of pages) rendered.push(await pageWithRedactions(page));
+      for (const page of pages) rendered.push(await pdfPageImage(await pageWithRedactions(page)));
       const blob = await imagesToPdf(rendered);
       options.download(blob, `${sourceName}-redacted.pdf`);
       const redacted = pages.filter((page) => page.boxes.length).length;

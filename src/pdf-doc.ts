@@ -203,6 +203,7 @@ export async function extractPdfLinks(file: Blob): Promise<PdfLink[]> {
   return links;
 }
 
+/** One page per image. JPEG pages are embedded as JPEG, everything else as PNG. */
 export async function imagesToPdf(pages: PdfPageImage[]): Promise<Blob> {
   const document = await PDFDocument.create();
   document.setTitle('');
@@ -212,7 +213,8 @@ export async function imagesToPdf(pages: PdfPageImage[]): Promise<Blob> {
   document.setProducer('LocalScribe');
   document.setCreator('LocalScribe');
   for (const page of pages) {
-    const image = await document.embedPng(await page.blob.arrayBuffer());
+    const bytes = await page.blob.arrayBuffer();
+    const image = page.blob.type === 'image/jpeg' ? await document.embedJpg(bytes) : await document.embedPng(bytes);
     const output = document.addPage([page.width, page.height]);
     output.drawImage(image, { x: 0, y: 0, width: page.width, height: page.height });
   }
