@@ -434,6 +434,16 @@ export async function processVideo(ffmpeg: AudioFfmpeg, operation: VideoOperatio
       run.signal?.throwIfAborted();
     }
   }
+  if (operation === 'change-speed') {
+    try {
+      const { changeSpeedInBrowser } = await import('./quick-video-browser');
+      const fast = await changeSpeedInBrowser(ffmpeg, file, probe, options, run);
+      if (fast) return one(fast, 'mp4', 'Re-encoded in the browser.');
+    } catch (error) {
+      run.signal?.throwIfAborted();
+      console.warn('Browser speed change unavailable; using FFmpeg.', error);
+    }
+  }
   const filters: string[] = [];
   if (operation === 'rotate-video') {
     if (angle === 90) filters.push('transpose=clock');
