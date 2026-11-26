@@ -3,10 +3,10 @@
  * blocked the page for the whole generation, about 9 s per 100 characters on
  * WASM. The page side (`KokoroEngine` in tts.ts) sends one sentence at a time.
  */
-import kokoroFactoryUrl from '../node_modules/kokoro-js/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url';
-import kokoroWasmUrl from '../node_modules/kokoro-js/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm?url';
-import kokoroJsepFactoryUrl from '../node_modules/kokoro-js/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs?url';
-import kokoroJsepWasmUrl from '../node_modules/kokoro-js/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm?url';
+import kokoroFactoryUrl from '../node_modules/kokoro-js/node_modules/@huggingface/transformers/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url';
+import kokoroWasmUrl from '../node_modules/kokoro-js/node_modules/@huggingface/transformers/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm?url';
+import kokoroJsepFactoryUrl from '../node_modules/kokoro-js/node_modules/@huggingface/transformers/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs?url';
+import kokoroJsepWasmUrl from '../node_modules/kokoro-js/node_modules/@huggingface/transformers/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm?url';
 
 export type KokoroWorkerRequest =
   | { id: number; type: 'load'; model: string; device: 'wasm' | 'webgpu'; dtype: string }
