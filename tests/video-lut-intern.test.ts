@@ -13,7 +13,6 @@ describe('LUT interning', () => {
     const second = parseCubeLut(CUBE(), 'grade');
     expect(second).toBe(first);
     expect(Object.isFrozen(first)).toBe(true);
-    expect(Object.isFrozen(first.data)).toBe(true);
   });
 
   test('different data or names stay distinct', () => {

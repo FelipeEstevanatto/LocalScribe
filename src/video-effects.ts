@@ -751,7 +751,10 @@ export function internLut(lut: ClipLut): ClipLut {
   const key = `${content}|${name}`;
   const existing = lutsByKey.get(key)?.deref();
   if (existing && existing.size === size && sameLutData(existing.data, lut.data)) return existing;
-  const shared = Object.freeze<ClipLut>({ name, size, data: Object.isFrozen(lut.data) ? lut.data : Object.freeze(lut.data.slice()) as number[] });
+  // The wrapper is frozen; the data array is not. Engines read frozen arrays
+  // through a slow path (JavaScriptCore: 10x slower in the export loop), and
+  // nothing writes to LUT data once it is parsed.
+  const shared = Object.freeze<ClipLut>({ name, size, data: lut.data });
   internedLuts.add(shared);
   lutKeys.set(shared, content);
   if (!existing) {
