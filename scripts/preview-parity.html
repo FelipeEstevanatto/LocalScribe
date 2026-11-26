@@ -15,6 +15,7 @@
   <div id="stages"></div>
   <script type="module">
     import { createGlPreview } from '/src/video-gl-preview.ts';
+    import { imageScores } from '/scripts/parity-metrics.js';
     import { buildPreviewFramePlan } from '/src/video-preview-plan.ts';
     import {
       applyPixelEffects,
@@ -209,6 +210,7 @@
       }
       diffs.sort();
       return {
+        ...imageScores(a, b, width, height),
         mean: +(sum / diffs.length).toFixed(3),
         p95: diffs[Math.floor(diffs.length * 0.95)],
         p99: diffs[Math.floor(diffs.length * 0.99)],

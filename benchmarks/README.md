@@ -225,6 +225,30 @@ Seek-to-first-frame on the 5 s sample: CSS 43.1 ms p50 / 95.4 ms p95; WebGL
 28.3 / 58.5 ms; WebGPU 28.0 / 52.5 ms. Playback frame pacing is not reported
 because background tabs throttle `requestAnimationFrame` to about 1 fps.
 
+### SSIM and PSNR (export gate for O8)
+
+Both harnesses also report SSIM (luma, 8x8 windows), the worst window, PSNR
+(RGB) and `passesO8` (SSIM >= 0.995 and PSNR >= 45 dB) from
+`scripts/parity-metrics.js`. Run on 2026-11-26 (Chromium 159, RTX 3060 Ti,
+ANGLE D3D11), against the exporter's Canvas2D path:
+
+- Per-pixel export effects pass with margin: chroma (SSIM 0.9998, 57.1 dB),
+  tone (0.9979, 52.9 dB), LUT (0.9981, 53.4 dB), tone + LUT (0.9983,
+  53.6 dB), opacity, blur 7 and 40, every blend mode, and `everything`
+  (0.9980, 45.9 dB).
+- 17 of 47 WebGL fixtures (13 of 31 WebGPU) fail the O8 gate, in two groups.
+  Hard edges (cover crops, transforms, rect and ellipse masks, the barn-door
+  transition, video transform): 0.3 to 2.9% of pixels differ by up to 80 to
+  255 on antialiased edges, so PSNR drops to 34 to 43 dB while the mean error
+  stays under 1.2. Smooth offsets (CSS colour filters, feathered masks, video
+  blur): every pixel is off by at most 4 to 10, PSNR 42.7 to 44.8 dB.
+- WebGL and WebGPU give the same numbers on every shared fixture except
+  blur 40 (46.83 vs 46.92 dB).
+
+So the GPU path is export-safe for the chroma, tone curve and LUT pass alone;
+geometry, CSS filters and masks would need edge handling matched to Canvas2D
+first. Raw results: `temp/perf/results/parity-ssim-psnr.json` (git-ignored).
+
 ### CSS preview parity
 
 `scripts/css-parity.html` pauses the same video frame and toggles the stage

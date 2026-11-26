@@ -14,6 +14,7 @@
   <div id="stages"></div>
   <script type="module">
     import { createGlPreview } from '/src/video-gl-preview.ts';
+    import { imageScores } from '/scripts/parity-metrics.js';
     import { createWebGpuPreview } from '/src/video-webgpu-preview.ts';
     import { renderPreviewToTarget } from '/src/video-preview-capture.ts';
     import { buildPreviewFramePlan } from '/src/video-preview-plan.ts';
@@ -188,7 +189,7 @@
       return ctx.getImageData(0, 0, copy.width, copy.height).data;
     }
 
-    function metrics(a, b) {
+    function metrics(a, b, width) {
       let sum = 0;
       let max = 0;
       let over8 = 0;
@@ -207,6 +208,7 @@
       }
       diffs.sort();
       return {
+        ...imageScores(a, b, width),
         mean: +(sum / diffs.length).toFixed(3),
         p95: diffs[Math.floor(diffs.length * 0.95)],
         max,
@@ -304,7 +306,7 @@
       copy.height = bitmap.height;
       copy.getContext('2d', { willReadFrequently: true }).drawImage(bitmap, 0, 0);
       const pixels = copy.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, copy.width, copy.height).data;
-      const diff = metrics(pixels, expected);
+      const diff = metrics(pixels, expected, copy.width);
       bitmap.close();
       return { backend, width: copy.width, height: copy.height, diff };
     };
@@ -330,9 +332,10 @@
         const entry = { name: config.name };
         if (gl.error) entry.webglError = gl.error;
         if (gpu.error) entry.webgpuError = gpu.error;
-        if (gl.pixels && gpu.pixels) entry.webgpuVsWebgl = metrics(gpu.pixels, gl.pixels);
-        if (gpu.pixels) entry.webgpuVsReference = metrics(gpu.pixels, ref);
-        if (gl.pixels) entry.webglVsReference = metrics(gl.pixels, ref);
+        const width = plan.output.width;
+        if (gl.pixels && gpu.pixels) entry.webgpuVsWebgl = metrics(gpu.pixels, gl.pixels, width);
+        if (gpu.pixels) entry.webgpuVsReference = metrics(gpu.pixels, ref, width);
+        if (gl.pixels) entry.webglVsReference = metrics(gl.pixels, ref, width);
         if (gpu.dataUrl) entry.gpuImage = gpu.dataUrl;
         results.push(entry);
       }
