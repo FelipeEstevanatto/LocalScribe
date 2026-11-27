@@ -24,9 +24,11 @@ import {
   QwenTokenizer,
   cleanQwenTranscript,
   qwenAudioTokenLength,
+  qwenPrompt,
 } from './qwen';
 import { computeWhisperLogMel } from './whisper-mel';
 import { getOrt, type OrtModule } from './ort-runtime';
+import type { QwenWebGpu } from './qwen-webgpu';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -234,6 +236,7 @@ const OTHER_CACHE_LABELS: Record<string, string> = {
   'localscribe-supertonic-v1': 'Supertonic 3 voice',
   'kokoro-voices': 'Kokoro voice styles',
 };
+const RETIRED_PHONON_REPO = 'tiyuvta/Phonon-2-ONNX';
 
 async function responseBytes(response: Response | undefined): Promise<number> {
   if (!response) return 0;
@@ -255,11 +258,24 @@ export async function listOtherCachedModels(): Promise<OtherCachedModel[]> {
   const names = await storage.keys().catch(() => [] as string[]);
   const rows: OtherCachedModel[] = [];
   for (const name of names) {
-    if (name === MODEL_CACHE_NAME || name.startsWith('localscribe-app-')) continue;
+    if (name.startsWith('localscribe-app-')) continue;
     const cache = await storage.open(name).catch(() => null);
     if (!cache) continue;
     const keys = await cache.keys().catch(() => [] as readonly Request[]);
     if (!keys.length) continue;
+    if (name === MODEL_CACHE_NAME) {
+      const retired = keys.filter((request) =>
+        new URL(request.url).pathname.startsWith(`/${RETIRED_PHONON_REPO}/resolve/`));
+      if (retired.length) {
+        let bytes = 0;
+        for (const request of retired) bytes += await responseBytes(await cache.match(request).catch(() => undefined));
+        rows.push({
+          id: 'retired-phonon-2', label: 'Phonon-2 (retired)', bytes,
+          cacheName: name, repo: RETIRED_PHONON_REPO,
+        });
+      }
+      continue;
+    }
     if (name === 'transformers-cache') {
       const repos = new Map<string, number>();
       for (const request of keys) {
@@ -1645,12 +1661,12 @@ interface OrtNodeMetadata {
 
 interface TensorNames {
   encoderAudio: string;
-  encoderLength: string;
+  encoderLength?: string;
   encoderOut: string;
-  encoderOutLengths: string;
+  encoderOutLengths?: string;
   decoderEncoder: string;
   decoderTargets: string;
-  decoderTargetLength: string;
+  decoderTargetLength?: string;
   decoderState1: string;
   decoderState2: string;
   decoderOut: string;
@@ -1898,6 +1914,9 @@ interface CreateSessionArgs {
   dataName?: string;
   label: string;
   preferWebGPU: boolean;
+  webgpuOnly?: boolean;
+  preferredOutputLocation?: SessionOptions['preferredOutputLocation'];
+  extra?: SessionOptions['extra'];
   onWarning: (message: string) => void;
 }
 
@@ -1908,6 +1927,9 @@ async function createSession({
   dataName,
   label,
   preferWebGPU,
+  webgpuOnly,
+  preferredOutputLocation = 'cpu',
+  extra,
   onWarning,
 }: CreateSessionArgs): Promise<{ session: OrtSession; backend: Backend }> {
   const graphBytes = graph instanceof Uint8Array ? graph : new Uint8Array(graph);
@@ -1926,10 +1948,11 @@ async function createSession({
   }
 
   const baseOptions: Record<string, unknown> = {
-    executionProviders: preferWebGPU ? ['webgpu', 'wasm'] : ['wasm'],
+    executionProviders: webgpuOnly ? ['webgpu'] : preferWebGPU ? ['webgpu', 'wasm'] : ['wasm'],
     ...(externalData.length ? { externalData } : {}),
     graphOptimizationLevel: 'all',
-    preferredOutputLocation: 'cpu',
+    preferredOutputLocation,
+    extra,
   };
 
   try {
@@ -1939,7 +1962,7 @@ async function createSession({
     );
     return { session, backend: preferWebGPU ? 'webgpu' : 'wasm' };
   } catch (error) {
-    if (!preferWebGPU) throw error;
+    if (!preferWebGPU || webgpuOnly) throw error;
     onWarning(
       `${label} could not initialize on WebGPU. Retrying on the CPU backend; this can be slower.`,
     );
@@ -2168,6 +2191,8 @@ export class AsrEngine {
   private ort: OrtModule | null = null;
   private encoder: OrtSession | null = null;
   private decoder: OrtSession | null = null;
+  private embedding: OrtSession | null = null;
+  private qwenWebGpu: QwenWebGpu | null = null;
   private frontend: OrtSession | null = null;
   private joint: OrtSession | null = null;
   private convFrontend: OrtSession | null = null;
@@ -2200,10 +2225,10 @@ export class AsrEngine {
   private disposed = false;
 
   constructor(options: EngineOptions) {
-    this.modelId = options.modelId;
-    this.variantId = options.variantId;
     this.model = getModel(options.modelId);
     this.variant = getVariant(this.model, options.variantId);
+    this.modelId = this.model.id;
+    this.variantId = this.variant.id;
     this.clean = this.model.cleanMode ? options.clean : false;
     this.language = this.model.languageOptions?.includes(options.language ?? '')
       ? options.language ?? ''
@@ -2227,6 +2252,7 @@ export class AsrEngine {
     }
 
     if (this.model.pipeline === 'cactus') return Boolean(this.cactus);
+    if (this.model.pipeline === 'qwen3-asr-webgpu') return Boolean(this.qwenWebGpu);
 
     if (!this.ort) return false;
 
@@ -2349,6 +2375,8 @@ export class AsrEngine {
       return this.transcribeQwen(samples, options);
     }
 
+    if (this.qwenWebGpu) return this.qwenWebGpu.transcribe(samples, options);
+
     if (this.model.pipeline === 'fluid-mini-tdt') {
       return this.transcribeMini(samples, options);
     }
@@ -2439,13 +2467,13 @@ export class AsrEngine {
       : [1, featureFrames, featureNMels];
 
     const audioTensor = new ort.Tensor('float32', featureData, featureDims);
-    const lengthTensor = this.makeLengthTensor(ort, featureLength);
-    const encoderOutputs = await encoder.run({
-      [names.encoderAudio]: audioTensor,
-      [names.encoderLength]: lengthTensor,
+    const encoderFeeds: Record<string, OrtTensor> = { [names.encoderAudio]: audioTensor };
+    if (names.encoderLength) {
+      encoderFeeds[names.encoderLength] = this.makeLengthTensor(ort, featureLength);
+    }
+    const encoderOutputs = await encoder.run(encoderFeeds).finally(() => {
+      Object.values(encoderFeeds).forEach(disposeTensor);
     });
-    disposeTensor(audioTensor);
-    disposeTensor(lengthTensor);
 
     const encoderTensor = encoderOutputs[names.encoderOut];
     if (!encoderTensor) {
@@ -2463,7 +2491,9 @@ export class AsrEngine {
     }
 
     const encoded = this.readEncoderOutput(encoderTensor);
-    const encodedLengthTensor = encoderOutputs[names.encoderOutLengths];
+    const encodedLengthTensor = names.encoderOutLengths
+      ? encoderOutputs[names.encoderOutLengths]
+      : undefined;
 
     let encodedFrames = encoded.frames;
     if (encodedLengthTensor) {
@@ -2505,6 +2535,9 @@ export class AsrEngine {
     let lastReportTime = 0;
     let lastPartialTime = 0;
     const guard = encodedFrames * (maxTokens + 2) + 128;
+    const projected = this.model.pipeline === 'projected-tdt';
+    const frameDims = projected ? [1, encoded.hidden] : [1, encoded.hidden, 1];
+    const tokenDims = projected ? [1] : [1, 1];
 
     try {
       while (frame < encodedFrames) {
@@ -2520,29 +2553,30 @@ export class AsrEngine {
         const frameTensor = new ort.Tensor(
           'float32',
           encoded.data.subarray(frame * encoded.hidden, (frame + 1) * encoded.hidden),
-          [1, encoded.hidden, 1],
+          frameDims,
         );
         const targetTensor = new ort.Tensor(
           'int32',
           Int32Array.of(lastToken),
-          [1, 1],
+          tokenDims,
         );
-        const targetLengthTensor = new ort.Tensor(
-          'int32',
-          Int32Array.of(1),
-          [1],
-        );
-
-        const decoderOutputs = await decoder.run({
+        const decoderFeeds: Record<string, OrtTensor> = {
           [names.decoderEncoder]: frameTensor,
           [names.decoderTargets]: targetTensor,
-          [names.decoderTargetLength]: targetLengthTensor,
           [names.decoderState1]: state1,
           [names.decoderState2]: state2,
+        };
+        const targetLengthTensor = names.decoderTargetLength
+          ? new ort.Tensor('int32', Int32Array.of(1), [1])
+          : undefined;
+        if (names.decoderTargetLength && targetLengthTensor) {
+          decoderFeeds[names.decoderTargetLength] = targetLengthTensor;
+        }
+        const decoderOutputs = await decoder.run(decoderFeeds).finally(() => {
+          disposeTensor(frameTensor);
+          disposeTensor(targetTensor);
+          disposeTensor(targetLengthTensor);
         });
-        disposeTensor(frameTensor);
-        disposeTensor(targetTensor);
-        disposeTensor(targetLengthTensor);
 
         const logitsTensor = decoderOutputs[names.decoderOut];
         if (!logitsTensor || !(logitsTensor.data instanceof Float32Array)) {
@@ -2896,19 +2930,7 @@ export class AsrEngine {
       audioTokens * audioHidden,
     );
 
-    const before = tokenizer.encode(
-      '<|im_start|>system\n<|im_end|>\n<|im_start|>user\n<|audio_start|>',
-    );
-    let after = tokenizer.encode(
-      '<|audio_end|><|im_end|>\n<|im_start|>assistant\n',
-    );
-    if (this.language) {
-      after = [
-        ...after,
-        ...tokenizer.encode(`language ${this.language}`),
-        tokenizer.asrTextId,
-      ];
-    }
+    const { before, after } = qwenPrompt(tokenizer, this.language);
     const source = [
       ...before,
       ...new Array<number>(audioTokens).fill(tokenizer.audioPadId),
@@ -3551,6 +3573,16 @@ export class AsrEngine {
         return;
       }
 
+      if (this.model.pipeline === 'qwen3-asr-webgpu') {
+        const gpu = this.useWebGPU ? await detectWebGPU() : null;
+        if (!gpu?.supported || !gpu.shaderF16) {
+          throw new AppError('Qwen3-ASR 1.7B Preview requires WebGPU with shader-f16 support.', {
+            code: 'WEBGPU_REQUIRED',
+            hint: 'Choose Qwen3-ASR 0.6B on this device.',
+          });
+        }
+      }
+
       const specs = resolveModelFiles(this.modelId, this.variantId, this.clean);
 
       // A single file above ~2 GB cannot be allocated as a contiguous buffer
@@ -3680,6 +3712,12 @@ export class AsrEngine {
         return;
       }
 
+      if (this.model.pipeline === 'qwen3-asr-webgpu') {
+        await this.loadQwenWebGpuSessions(ort, blobs, specs, signal);
+        this.emit({ phase: 'ready', message: 'Model ready.' });
+        return;
+      }
+
       const configBlob = blobs.get('config');
       const vocabBlob = blobs.get('vocab');
       const tokenizerBlob = blobs.get('tokenizer');
@@ -3702,9 +3740,11 @@ export class AsrEngine {
           },
         );
       } else if (vocabBlob) {
-        this.tokenizer = new VocabularyTokenizer(
-          await modelDataToText(vocabBlob),
-        );
+        const vocab = await modelDataToText(vocabBlob);
+        // The projected export omits the TDT blank from vocab.txt.
+        this.tokenizer = new VocabularyTokenizer(this.model.pipeline === 'projected-tdt'
+          ? `${vocab}\n<blk> ${this.config.blankTokenId}`
+          : vocab);
       }
 
       const dataNameFor = (role: ModelFileRole): string | undefined =>
@@ -3744,7 +3784,8 @@ export class AsrEngine {
             ? 'This usually means the model exceeded the browser’s roughly 4 GB WebAssembly limit or used an operator this backend cannot run. Try the Compact variant or a smaller model. '
             : '') +
           `Underlying error: ${detail}${detail.endsWith('.') ? '' : '.'} ` +
-          'If this repeats, close other tabs to free memory and use a recent desktop build of Chrome or Edge. A failed WebGPU attempt already falls back to CPU.',
+          'If this repeats, close other tabs to free memory and use a recent desktop build of Chrome or Edge.' +
+          (this.model.requiresWebGPU ? '' : ' A failed WebGPU attempt already falls back to CPU.'),
       });
     }
   }
@@ -4058,6 +4099,64 @@ export class AsrEngine {
     });
   }
 
+  private async loadQwenWebGpuSessions(
+    ort: OrtModule,
+    blobs: Map<ModelFileRole, ModelData>,
+    specs: ResolvedModelFile[],
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const { QwenWebGpu, qwenWebGpuOutputLocations } = await import('./qwen-webgpu');
+    const requireFile = (role: ModelFileRole): ModelData => {
+      const data = blobs.get(role);
+      if (data) return data;
+      throw new AppError('The model download is incomplete.', {
+        code: 'MODEL_FILES_MISSING',
+        hint: 'Clear the cached model and try again.',
+      });
+    };
+    const assertActive = () => {
+      signal?.throwIfAborted();
+      if (this.disposed) throw abortError('Model loading was cancelled.');
+    };
+    const open = async (
+      graphRole: ModelFileRole,
+      dataRole: ModelFileRole,
+      preferredOutputLocation?: SessionOptions['preferredOutputLocation'],
+    ) => {
+      assertActive();
+      const spec = specs.find((file) => file.role === dataRole);
+      this.emit({ phase: 'session', message: `Loading ${spec?.name ?? graphRole}…` });
+      const { session } = await createSession({
+        ort,
+        graph: await modelDataToArrayBuffer(requireFile(graphRole)),
+        data: requireFile(dataRole),
+        dataName: spec?.name.split('/').at(-1),
+        label: this.model.name,
+        preferWebGPU: true,
+        webgpuOnly: true,
+        preferredOutputLocation,
+        onWarning: (message) => this.recordWarning(message),
+      });
+      blobs.delete(graphRole);
+      blobs.delete(dataRole);
+      return session;
+    };
+
+    const vocab = await modelDataToText(requireFile('tokenizerVocab'));
+    const merges = await modelDataToText(requireFile('tokenizerMerges'));
+    const config = await modelDataToText(requireFile('tokenizerConfig'));
+    const preprocessor = JSON.parse(await modelDataToText(requireFile('preprocessor')));
+    const tokenizer = new QwenTokenizer(vocab, merges, config);
+    this.encoder = await open('encoderGraph', 'encoderData');
+    this.embedding = await open('embedTokens', 'embedTokensData');
+    this.decoder = await open('decoderGraph', 'decoderData', qwenWebGpuOutputLocations());
+    assertActive();
+    this.qwenWebGpu = new QwenWebGpu(
+      ort, this.encoder, this.embedding, this.decoder, tokenizer, preprocessor, this.language,
+    );
+    this.backend = 'webgpu';
+  }
+
   private async loadFusedSessions(
     ort: OrtModule,
     blobs: Map<ModelFileRole, ModelData>,
@@ -4114,6 +4213,7 @@ export class AsrEngine {
 
     this.emit({ phase: 'session', message: 'Loading the TDT decoder…' });
 
+    const projected = this.model.pipeline === 'projected-tdt';
     const decoderResult = await createSession({
       ort,
       graph: await modelDataToArrayBuffer(decoderGraphBlob),
@@ -4121,12 +4221,24 @@ export class AsrEngine {
       dataName: dataNameFor('decoderData'),
       label: `${this.model.name} decoder`,
       preferWebGPU: false,
+      extra: projected ? { session: { disable_quant_qdq: '1' } } : undefined,
       onWarning: (message) => this.recordWarning(message),
     });
 
     this.decoder = decoderResult.session;
-    this.names = resolveTensorNames(this.encoder, this.decoder);
-    this.readEncoderLayout(this.encoder);
+    this.names = projected ? {
+      encoderAudio: 'features',
+      encoderOut: 'encoded',
+      decoderEncoder: 'encoded',
+      decoderTargets: 'token',
+      decoderState1: 'h',
+      decoderState2: 'c',
+      decoderOut: 'logits',
+      decoderState1Out: 'h_out',
+      decoderState2Out: 'c_out',
+    } : resolveTensorNames(this.encoder, this.decoder);
+    if (projected) this.featuresFirst = false;
+    else this.readEncoderLayout(this.encoder);
     this.readDecoderMetadata(this.decoder);
     this.readLengthDtype(this.encoder);
 
@@ -4413,6 +4525,7 @@ export class AsrEngine {
   private async releaseSessions(): Promise<void> {
     const encoder = this.encoder;
     const decoder = this.decoder;
+    const embedding = this.embedding;
     const frontend = this.frontend;
     const joint = this.joint;
     const convFrontend = this.convFrontend;
@@ -4423,6 +4536,8 @@ export class AsrEngine {
 
     this.encoder = null;
     this.decoder = null;
+    this.embedding = null;
+    this.qwenWebGpu = null;
     this.frontend = null;
     this.joint = null;
     this.convFrontend = null;
@@ -4442,7 +4557,7 @@ export class AsrEngine {
     await granite?.dispose().catch(() => undefined);
     await transformersAsr?.dispose().catch(() => undefined);
 
-    for (const session of [encoder, decoder, frontend, joint, convFrontend, preprocessor, omnilingualSession]) {
+    for (const session of [encoder, decoder, embedding, frontend, joint, convFrontend, preprocessor, omnilingualSession]) {
       if (!session) continue;
       try {
         const release = (session as unknown as { release?: () => Promise<void> }).release;

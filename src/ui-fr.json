@@ -996,5 +996,16 @@
   "Aucune parole détectée",
   "Inspecter les métadonnées",
   "Convertir le format",
-  "Outils vidéo rapides"
+  "Outils vidéo rapides",
+  "Transcription multilingue compacte",
+  "25 langues · Phonon-2.5 · 380 Mo",
+  "Qwen3-ASR 1.7B (aperçu)",
+  "Portugais brésilien et mandarin",
+  "Encodeur 2 bits + décodeur INT8 · 380 Mo",
+  "Encodeur FP16 + décodeur 4 bits · 1,92 Go",
+  "Ce modèle nécessite WebGPU avec la prise en charge de shader-f16.",
+  "Recherche",
+  "Phonon-2 (retiré)",
+  "Sélectionner Phonon-2.5",
+  "Sélectionner Qwen3-ASR 1.7B (aperçu)"
 ]

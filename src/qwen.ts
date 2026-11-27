@@ -294,6 +294,16 @@ export class QwenTokenizer {
   }
 }
 
+export function qwenPrompt(tokenizer: QwenTokenizer, language: string): {
+  before: number[];
+  after: number[];
+} {
+  const before = tokenizer.encode('<|im_start|>system\n<|im_end|>\n<|im_start|>user\n<|audio_start|>');
+  const after = tokenizer.encode('<|audio_end|><|im_end|>\n<|im_start|>assistant\n');
+  if (language) after.push(...tokenizer.encode(`language ${language}`), tokenizer.asrTextId);
+  return { before, after };
+}
+
 /**
  * Rumble's auto-detect output starts with `language English.`; Qwen3-ASR
  * sometimes emits `<asr_text>` as a literal token. Strip only that leading

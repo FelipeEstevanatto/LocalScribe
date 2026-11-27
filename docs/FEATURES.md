@@ -10,7 +10,7 @@ audio to a server.
 
 There is no backend, no account, and no analytics. The audio file never leaves the tab.
 
-- **Selectable speech models**  -  Fluid Speech, Moonshine, timestamped Whisper, Parakeet Redux, Parakeet Ultra, Phonon-2, Rumble-2-Flash, Qwen3-ASR, Omnilingual ASR, Granite Speech, and Whistle.
+- **Selectable speech models**  -  Fluid Speech, Moonshine, timestamped Whisper, Parakeet Redux, Parakeet Ultra, Phonon-2.5, Rumble-2-Flash, Qwen3-ASR 0.6B and 1.7B Preview, Omnilingual ASR, Granite Speech, and Whistle.
 - **A local text-to-speech tab**  -  six voice engines: tiny-voca (21 MB, two voices, bundled), Kokoro-82M (28 US/UK voices, FP32 or Q8), Underdog Woof (41 MB, two voices, no ONNX), Reverb-TTS (297M, zero-shot voice cloning in seven languages, WebGPU), Phonon 31M (streaming English), and Supertonic 3 (31 languages). Output can be MP3 (default), WAV, OGG, FLAC, M4A, WebM, or Opus.
 - **Vision studio**  -  background removal, depth estimation, object detection, image segmentation, ImageNet classification, and image captioning through Transformers.js.
 - **A proper Model Setup card**  -  pick a model, choose WebGPU or WASM, load or reload, and watch inline progress with a cancel button. The status dot shows ready, busy, cached, or partial at a glance.
@@ -70,7 +70,7 @@ deliberately leaves ambiguous sequences alone (for example “ten thirty” is n
 ### Presets, model fit, and the session strip
 
 The preset row chooses a model for a job: voice note (Moonshine Tiny), English dictation (Fluid
-Speech Mini), multilingual (Parakeet Ultra), meeting (Qwen3-ASR), best English accuracy (Phonon-2),
+Speech Mini), multilingual (Parakeet Ultra), meeting (Qwen3-ASR 0.6B), compact multilingual transcription (Phonon-2.5),
 translation (Granite Speech, WebGPU only), and long-tail languages (Omnilingual). Every preset is
 just a model, language, and clean-mode selection; it can be changed afterwards.
 
@@ -339,14 +339,15 @@ generated pages; run `npm run build && npm run preview` to inspect them locally.
 | **Fluid Speech Pro  -  Full** | **~2.67 GB** | 25 European languages | Same model, fp32 weights | Fused FastConformer-TDT · **blocked in Chromium** |
 | **Parakeet Redux** | **~263 MB FP32 decoder / 208 MB INT8 decoder** | 25 European languages | 5.69% average on 7 English sets (Moondream) | Fused 2-bit Parakeet TDT |
 | **Parakeet Ultra** | **402 MB (4-bit encoder) / 456 MB FP32 decoder / 497 MB WebGPU int4** | 25 European languages | 5.80% on 7 English sets, 9.55% on FLEURS (Redux 6.26% / 11.62%, same harness) | Fused 4-bit Parakeet TDT |
-| **Phonon-2** | **~736 MB exact / 688 MB INT8** | English | 5.21% average on 7 English sets (Fermion); int8 export 4.35% on LibriSpeech dev-clean | Fused Phonon TDT + exact preprocessor |
+| **Phonon-2.5** | **380 MB** | 25 European languages | 5.06% average WER on 7 English sets (Fermion) | Projected TDT encoder + INT8 decoder with word timestamps |
 | **Rumble-2-Flash** | **~656 MB** | 45 languages, auto-detected | 6.60 average English WER on 9 sets (Reson8) | Qwen3 conv frontend + encoder + KV-cache decoder |
 | **Qwen3-ASR 0.6B** | **~987 MB** | 30 languages + 22 Chinese dialects | 2.11% / 4.55% WER on LibriSpeech clean / other (Qwen) | Qwen3 conv frontend + encoder + KV-cache decoder |
+| **Qwen3-ASR 1.7B Preview** | **1.92 GB** | 30 languages + 22 Chinese dialects | 4.3% WER on 22 Brazilian Portuguese clips (LocalScribe) | WebGPU with shader-f16, 4-bit decoder, 15-second chunks |
 | **Omnilingual ASR 300M** | **~1.30 GB FP32 / 328 MB INT8** | 1,600+ languages | Meta: CER < 10 for 78% of languages | OmniASR CTC · raw waveform |
 | **Granite Speech 5.0 2B** | **~1.73 GB** | 6 languages + English translation | 2.43% WER on the 73-utterance LibriSpeech dummy set (4-bit ONNX) | Transformers.js / WebGPU |
 | **Whistle** | **~18 MB** (17 MB model + 1.3 MB engine) | English, German, French, Spanish, Italian, Dutch, Polish | Not published on the model card | Cactus WebAssembly engine · word timestamps |
 
-Fluid Speech Mini is the default English dictation model. Vision, Kokoro, Moonshine, Whisper, and Omnilingual default to FP32. Parakeet Redux defaults to the FP32 decoder with its losslessly packed ternary encoder. Phonon-2 defaults to its lossless encoder and FP32 decoder. Choose a compact variant for lower download and memory requirements. Some browser exports have a single precision, and Fluid Speech Pro’s FP32 package exceeds the loader’s single-file limit.
+Fluid Speech Mini is the default English dictation model. Vision, Kokoro, Moonshine, Whisper, and Omnilingual default to FP32. Parakeet Redux defaults to the FP32 decoder with its losslessly packed ternary encoder. Choose a compact variant for lower download and memory requirements. Some browser exports have a single precision, and Fluid Speech Pro’s FP32 package exceeds the loader’s single-file limit.
 
 The picker also shows model family, the **exact language names**, release date, license, accuracy notes, and a per-variant size. The comparison table lists every model’s exact languages; Qwen3-ASR also lists its 22 Chinese dialects. A language override appears for Rumble-2-Flash and Qwen3-ASR, with **Auto-detect** as the default.
 
@@ -491,8 +492,8 @@ Model-specific frontend
   ├─ Fluid Speech Pro / Parakeet Redux
   │    fused FastConformer encoder → fused TDT decoder_joint
   │
-  ├─ Phonon-2
-  │    exact Phonon preprocessor → fused TDT encoder / decoder_joint
+  ├─ Phonon-2.5
+  │    NeMo log-mel → projected TDT encoder → decoder_joint
   │
   ├─ Fluid Speech Mini
   │    NeMo log-mel → conv frontend → encoder → decoder + joint
@@ -500,6 +501,9 @@ Model-specific frontend
   ├─ Rumble-2-Flash / Qwen3-ASR 0.6B
   │    Whisper log-mel → conv frontend → masked encoder
   │    → prompt with audio placeholders → KV-cache decoder
+  │
+  ├─ Qwen3-ASR 1.7B Preview
+  │    Whisper log-mel → WebGPU encoder → token embeddings → WebGPU KV-cache decoder
   │
   ├─ Moonshine Tiny / Base
   │    Transformers.js feature extractor → encoder → decoder
@@ -638,7 +642,8 @@ Why not one giant `ArrayBuffer`? Cached model files are assembled into a `Blob` 
 - **Granite Speech requires WebGPU** and will not run on the CPU. It is blocked before download when no adapter is available.
 - **Fluid Speech Mini** is English-only.
 - **Parakeet Redux**, **Fluid Speech Pro**, **Rumble-2-Flash**, and **Qwen3-ASR** cover different multilingual sets; see the table and the exact language list in the picker.
-- **Phonon-2** is English only. Its ONNX package uses a separate 1.2 MB preprocessor graph, so its features match Fermion’s reference runtime.
+- **Phonon-2.5** uses the in-app NeMo log-mel frontend and the shared TDT decoder loop. The decoder runs on WASM, and the encoder can use WebGPU or WASM.
+- **Qwen3-ASR 1.7B Preview** keeps its decoder cache on the GPU and needs a WebGPU adapter with shader-f16. Use Qwen3-ASR 0.6B on CPU.
 - **Fluid Speech Pro on CPU is slow.** In a one-thread WASM test, a 5.5-second clip took about 65 seconds. Use WebGPU for Pro, or choose Mini/Redux on CPU.
 - **Qwen3-ASR 0.6B is slower on CPU than Rumble.** Its int8 KV-cache decoder runs on WASM. With eight WASM threads, a 30-second clip took about 12 seconds with Qwen3-ASR and about 9 seconds with Rumble-2-Flash. The decoder reserve was tightened to match realistic speech token rates, which reduces the cache copied per token.
 - **The full-precision Pro model** stores its weights in one 2.59 GB external-data file. Chromium cannot allocate a single buffer that large, so the app blocks it before downloading and points to Compact.
@@ -740,8 +745,8 @@ public/
 - **Parakeet Redux** by Moondream, based on NVIDIA Parakeet TDT 0.6B v3  -  **CC BY 4.0**.
 - **Parakeet Ultra** by Moondream, based on NVIDIA Parakeet TDT 0.6B v3  -  **CC BY 4.0**.
 - **Rumble-2-Flash** by Reson8  -  **Apache 2.0**.
-- **Qwen3-ASR 0.6B** by Alibaba Cloud  -  **Apache 2.0**.
-- **Phonon-2** by Fermion Research, ONNX export by Tiyuvta  -  **CC BY 4.0**.
+- **Qwen3-ASR 0.6B and 1.7B** by Alibaba Cloud  -  **Apache 2.0**. SubtitleKing provides the 1.7B preview ONNX export.
+- **Phonon-2.5** by Fermion Research, ONNX export by Enriqueag  -  **CC BY 4.0**.
 - **Granite Speech 5.0 2B** by IBM  -  **Apache 2.0**.
 - **Moonshine Tiny/Base** by Useful Sensors / Moonshine AI  -  **MIT**.
 - **Omnilingual ASR 300M** by Meta AI, ONNX export by OpenVoiceOS  -  **Apache 2.0**.

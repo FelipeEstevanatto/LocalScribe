@@ -996,5 +996,16 @@
   "No se encontró voz",
   "Inspeccionar metadatos",
   "Convertir formato",
-  "Herramientas rápidas de vídeo"
+  "Herramientas rápidas de vídeo",
+  "Transcripción multilingüe compacta",
+  "25 idiomas · Phonon-2.5 · 380 MB",
+  "Qwen3-ASR 1.7B (vista previa)",
+  "Portugués de Brasil y mandarín",
+  "Codificador de 2 bits + decodificador INT8 · 380 MB",
+  "Codificador FP16 + decodificador de 4 bits · 1,92 GB",
+  "Este modelo requiere WebGPU con compatibilidad con shader-f16.",
+  "Investigación",
+  "Phonon-2 (retirado)",
+  "Seleccionar Phonon-2.5",
+  "Seleccionar Qwen3-ASR 1.7B (vista previa)"
 ]

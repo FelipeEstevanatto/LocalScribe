@@ -41,9 +41,9 @@ export const JOB_PRESETS: JobPreset[] = [
   },
   {
     id: 'accuracy',
-    label: 'Best English accuracy',
-    detail: 'Phonon-2 · Exact encoder',
-    modelId: 'phonon-2',
+    label: 'Compact multilingual transcription',
+    detail: '25 languages · Phonon-2.5 · 380 MB',
+    modelId: 'phonon-2.5',
   },
   {
     id: 'translation',

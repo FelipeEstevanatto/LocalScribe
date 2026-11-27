@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
-import { getModel, resolveModelFiles } from '../src/catalog';
+import { defaultSelection, findModel, getModel, resolveModelFiles } from '../src/catalog';
+import { modelNeedsWebGpu } from '../src/capabilities';
 
 test('Parakeet Ultra variants resolve to the right repository and pinned revision', () => {
   const [encoder] = resolveModelFiles('parakeet-ultra', 'w4a8', false);
@@ -16,4 +17,25 @@ test('each Ultra variant size matches its files', () => {
     const total = variant.files(false).reduce((sum, file) => sum + file.size, 0);
     expect(total).toBe(variant.approxBytes);
   }
+});
+
+test('old Phonon selections resolve to the multilingual TDT replacement', () => {
+  const model = getModel('phonon-2.5');
+  expect(findModel('phonon-2')).toBe(model);
+  expect(model.timestamps).toBe('word');
+  expect(model.languagesDetail).toContain('Portuguese');
+  expect(modelNeedsWebGpu(model, { supported: false })).toBe(false);
+  expect(defaultSelection().modelId).toBe('fluid-mini');
+});
+
+test('the Qwen preview requires shader-f16 and fits under the model picker limit', () => {
+  const model = getModel('qwen3-asr-1.7b');
+  const files = resolveModelFiles(model.id, model.defaultVariant, false);
+  expect(model.chunkSeconds).toBe(15);
+  expect(modelNeedsWebGpu(model, { supported: true, shaderF16: false })).toBe(true);
+  expect(modelNeedsWebGpu(model, { supported: true, shaderF16: true })).toBe(false);
+  expect(model.variants[0].approxBytes).toBe(files.reduce((sum, file) => sum + file.size, 0));
+  expect(model.variants[0].approxBytes).toBeLessThan(2_000_000_000);
+  expect(files.filter((file) => file.name.endsWith('.onnx_data')).map((file) => file.role))
+    .toEqual(['encoderData', 'embedTokensData', 'decoderData']);
 });

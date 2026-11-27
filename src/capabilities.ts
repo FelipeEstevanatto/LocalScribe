@@ -5,6 +5,7 @@ export interface DeviceProfile {
   memoryGB: number | null;
   mobile: boolean;
   webgpu: boolean;
+  shaderF16?: boolean;
 }
 
 export type FitTone = 'good' | 'warn' | 'muted';
@@ -23,7 +24,7 @@ function isMobile(): boolean {
   return touch && /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
 }
 
-export function readDeviceProfile(webgpu: boolean): DeviceProfile {
+export function readDeviceProfile(webgpu: boolean, shaderF16?: boolean): DeviceProfile {
   const cores = navigator.hardwareConcurrency;
   const memory = (navigator as NavigatorWithMemory).deviceMemory;
 
@@ -38,7 +39,16 @@ export function readDeviceProfile(webgpu: boolean): DeviceProfile {
         : null,
     mobile: isMobile(),
     webgpu,
+    shaderF16,
   };
+}
+
+export function modelNeedsWebGpu(
+  model: SupportedModel,
+  gpu: { supported: boolean; shaderF16?: boolean },
+): boolean {
+  return Boolean(model.requiresWebGPU &&
+    (!gpu.supported || (model.requiresWebGPU === 'shader-f16' && !gpu.shaderF16)));
 }
 
 /** Prefer the compact model tier on phones, low-RAM machines, and CPU-only browsers. */
@@ -55,11 +65,14 @@ export function modelFit(
   model: SupportedModel,
   variant: ModelVariant,
   profile: DeviceProfile,
-): FitResult {  if (model.pipeline === 'granite-speech' && !profile.webgpu) {
+): FitResult {
+  if (modelNeedsWebGpu(model, { supported: profile.webgpu, shaderF16: profile.shaderF16 })) {
     return {
       tone: 'warn',
       label: 'WebGPU required',
-      detail: 'Granite’s 4-bit embedding has no CPU kernel. Pick another model here.',
+      detail: model.requiresWebGPU === 'shader-f16'
+        ? 'This model requires WebGPU with shader-f16 support.'
+        : 'This model requires WebGPU and will not run in this browser.',
     };
   }
 

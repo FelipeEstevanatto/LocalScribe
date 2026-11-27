@@ -996,5 +996,16 @@
   "Keine Sprache gefunden",
   "Metadaten prüfen",
   "Format konvertieren",
-  "Schnelle Videotools"
+  "Schnelle Videotools",
+  "Kompakte mehrsprachige Transkription",
+  "25 Sprachen · Phonon-2.5 · 380 MB",
+  "Qwen3-ASR 1.7B (Vorschau)",
+  "Brasilianisches Portugiesisch und Mandarin",
+  "2-Bit-Encoder + INT8-Decoder · 380 MB",
+  "FP16-Encoder + 4-Bit-Decoder · 1,92 GB",
+  "Dieses Modell benötigt WebGPU mit shader-f16-Unterstützung.",
+  "Forschung",
+  "Phonon-2 (eingestellt)",
+  "Phonon-2.5 auswählen",
+  "Qwen3-ASR 1.7B (Vorschau) auswählen"
 ]

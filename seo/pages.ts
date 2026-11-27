@@ -86,13 +86,13 @@ export const MODELS: Record<string, SeoModel> = {
     bestFor: 'Multilingual meetings',
     note: 'The most accurate multilingual option in the catalog, with optional clean mode for filler removal.',
   },
-  'phonon-2': {
-    id: 'phonon-2',
-    name: 'Phonon-2',
-    size: '688 MB',
-    languages: 'English',
-    bestFor: 'Best English accuracy',
-    note: 'An English TDT model with an exact preprocessor. Pick it when accuracy matters more than download size.',
+  'phonon-2.5': {
+    id: 'phonon-2.5',
+    name: 'Phonon-2.5',
+    size: '380 MB',
+    languages: '25 European languages',
+    bestFor: 'Compact multilingual transcription',
+    note: 'Automatically detects the language and returns word timestamps. WebGPU accelerates the encoder.',
   },
   'rumble-2-flash': {
     id: 'rumble-2-flash',
@@ -220,14 +220,14 @@ export const USE_CASES: SeoPage[] = [
       },
       {
         title: 'Pick accuracy vs speed',
-        body: 'Moonshine Tiny is 32 MB; Fluid Speech Mini is 300 MB; Phonon-2 is the accuracy pick at 688 MB.',
+        body: 'Moonshine Tiny is 32 MB. Fluid Speech Mini is 300 MB. Phonon-2.5 covers 25 languages at 380 MB.',
       },
       {
         title: 'Keep a local record',
         body: 'Turn on history to keep text and timings in IndexedDB. Audio is never stored, and turning history off deletes the database.',
       },
     ],
-    modelIds: ['fluid-mini', 'moonshine-tiny', 'phonon-2'],
+    modelIds: ['fluid-mini', 'moonshine-tiny', 'phonon-2.5'],
     preset: 'dictation',
     faq: [
       {
@@ -378,7 +378,7 @@ export const USE_CASES: SeoPage[] = [
         body: 'Add several episodes, run them with one model, and keep the results in local history.',
       },
     ],
-    modelIds: ['fluid-pro', 'phonon-2', 'parakeet-redux'],
+    modelIds: ['fluid-pro', 'phonon-2.5', 'parakeet-redux'],
     preset: 'accuracy',
     faq: [
       {
@@ -436,7 +436,7 @@ export const USE_CASES: SeoPage[] = [
       },
       {
         q: 'Can it handle accents and noisy rooms?',
-        a: 'Larger models and WebGPU help. For difficult recordings, try Phonon-2 or Fluid Speech Mini rather than a 32 MB model, and keep the microphone or source close.',
+        a: 'For difficult recordings, try Phonon-2.5 or Fluid Speech Mini and keep the microphone or source close.',
       },
       {
         q: 'Does it separate speakers?',

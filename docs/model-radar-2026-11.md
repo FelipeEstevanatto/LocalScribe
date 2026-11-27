@@ -8,6 +8,17 @@ tab under the project's existing constraints.
 Date of survey: **21 November 2026**. Everything below was checked against a live model repo,
 a published browser runtime, or both. Sizes are decimal MB unless noted.
 
+## ASR benchmark follow-up, 27 November 2026
+
+| Model | Decision | Local result |
+| --- | --- | --- |
+| [Phonon-2.5](https://huggingface.co/enriqueag/phonon-2.5-onnx) | Replaces the optional Phonon-2 entry | The 380 MB export matched Phonon-2 at 2.0% clean English WER and covers 25 European languages. |
+| [Qwen3-ASR 1.7B](https://huggingface.co/subtitleking/qwen3-asr-1.7b-onnx) | Optional WebGPU preview | The 1.92 GB export scored 4.3% clean Brazilian Portuguese WER against 11.1% for Qwen 0.6B. The preview uses 15-second chunks. |
+| [MOSS-Transcribe-Diarize](https://huggingface.co/moonbox-dev/MOSS-Transcribe-Diarize-ONNX) | Research footnote | The 745 MB INT4 prototype matched the existing diarizer on six constructed turns and generated text on digital silence. |
+| [Oruk Fourier 2B](https://huggingface.co/oruk/oruk-fourier-2b) | Research footnote | The native INT8 export scored 41.2% WER on four noisy English clips. The 2.41 GB download exceeds the picker limit and the weights are CC BY-NC 4.0. |
+
+The browser runs used Edge and an RTX 3060 Ti. The corpus covered 44 FLEURS clips plus noisy, stitched, and silence fixtures.
+
 ---
 
 ## TL;DR
@@ -44,7 +55,6 @@ SAM 3 tracker Nov 2025, SmolVLM2 Feb 2025, Depth Anything 3 Small Nov 2025.
 
 - **RMBG 3.0** — 16 GB diffusion transformer, 32 GB GPU requirement, self-hosted license. Not a browser model.
 - **Cohere Transcribe 2B** — best q4 artifact is a 1.5 GB custom `.oasr` file. Too large and not ONNX.
-- **Qwen3-ASR 1.7B** — 4.7 GB fp32; the existing 0.6B is the browser-sized member of the family.
 - **Voxtral Mini 4B Realtime / Nemotron 3.5 Transcribe 30B / VibeVoice 7B** — server-class.
 - **Fluid Speech Pico** — still announced, not released.
 - **YOLO26** — strong, but AGPL-3.0 weights; D-FINE and RF-DETR are Apache-2.0.
@@ -479,7 +489,6 @@ These are small but high-leverage, even though they are not headline model cards
 | [RF-DETR Nano](https://huggingface.co/Roboflow/rf-detr-nano) | 122 MB, Apache 2.0, stronger than D-FINE, but no maintained ONNX export for the TJS `rf_detr` class. | An official ONNX export or `onnx-community` conversion. |
 | [Kokoro v1.1-zh ONNX](https://huggingface.co/onnx-community/Kokoro-82M-v1.1-zh-ONNX) | Adds Chinese to the existing Kokoro engine, but the bundled `kokoro-js` path is English-only and needs a Chinese phonemizer. | A Chinese G2P that can run in the existing TTS worker. |
 | Demucs / stem separation ONNX | Small community exports exist, but no clear license/quality leader and the models are heavy for a tab. | A well-maintained MIT/Apache 4-stem ONNX export under 200 MB. |
-| [Qwen3-ASR 1.7B](https://huggingface.co/Qwen/Qwen3-ASR-1.7B) | Best-in-family accuracy, but 4.7 GB fp32; the 0.6B is already the browser-sized member. | A sub-1 GB int4 sherpa/ONNX export. |
 
 ## Suggested rollout
 

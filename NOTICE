@@ -45,14 +45,24 @@ ONNX conversion: https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-i
 License: Apache 2.0
          https://www.apache.org/licenses/LICENSE-2.0
 
-Phonon-2 (ONNX export)
-----------------------
-Model: Phonon-2 by Fermion Research
-Source: https://huggingface.co/FermionResearch/Phonon-2
-ONNX export: https://huggingface.co/tiyuvta/Phonon-2-ONNX
+Qwen3-ASR 1.7B Preview (WebGPU ONNX)
+----------------------------------
+Model: Qwen3-ASR 1.7B by Alibaba Cloud
+Source: https://huggingface.co/Qwen/Qwen3-ASR-1.7B
+ONNX conversion: https://huggingface.co/subtitleking/qwen3-asr-1.7b-onnx
+License: Apache 2.0
+         https://www.apache.org/licenses/LICENSE-2.0
+
+Phonon-2.5 (ONNX export)
+------------------------
+Model: Phonon-2.5 by Fermion Research
+Source: https://huggingface.co/FermionResearch/Phonon-2.5
+ONNX export: https://huggingface.co/enriqueag/phonon-2.5-onnx
 License: CC BY 4.0
          https://creativecommons.org/licenses/by/4.0/
-Derived from NVIDIA Parakeet TDT 0.6B v3.
+Derived from NVIDIA Parakeet TDT 0.6B v3, copyright NVIDIA Corporation.
+Fermion retrained and compressed the model. Enriqueag converted and packed the weights for ONNX.
+Upstream attribution: https://huggingface.co/enriqueag/phonon-2.5-onnx/blob/5a76001bd8dfc058632290d2ef594236b7ca2bd4/NOTICE
 
 Granite Speech 5.0 2B (ONNX)
 ----------------------------

@@ -28,17 +28,20 @@ export type ModelId =
   | 'fluid-pro'
   | 'parakeet-redux'
   | 'parakeet-ultra'
-  | 'phonon-2'
+  | 'phonon-2.5'
   | 'rumble-2-flash'
   | 'qwen3-asr-0.6b'
+  | 'qwen3-asr-1.7b'
   | 'omnilingual-300m'
   | 'granite-speech-5'
   | 'whistle';
 
 export type ModelPipeline =
   | 'fused-tdt'
+  | 'projected-tdt'
   | 'fluid-mini-tdt'
   | 'qwen3-asr'
+  | 'qwen3-asr-webgpu'
   | 'moonshine'
   | 'whisper'
   | 'omnilingual'
@@ -137,6 +140,7 @@ export interface SupportedModel {
    * TDT decode loop is many small kernels).
    */
   preferCpu?: boolean;
+  requiresWebGPU?: 'standard' | 'shader-f16';
   /** Audio is split near this many seconds before inference. Default 30. */
   chunkSeconds?: number;
   defaultVariant: string;
@@ -190,12 +194,14 @@ const RUMBLE_REVISION = 'a8128305e8e8c4aa5bf6fcd0a8454347ff80d6d1';
 
 const QWEN_REPO = 'csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25';
 const QWEN_REVISION = '68818b2313fe77bd06f6a7c5068ff3ef59d02b8a';
+const QWEN_WEBGPU_REPO = 'subtitleking/qwen3-asr-1.7b-onnx';
+const QWEN_WEBGPU_REVISION = 'c777781bb694c71f85a422df5b4850bc141667fa';
 
 const GRANITE_REPO = 'ibm-granite/granite-speech-5.0-2b-ONNX';
 const GRANITE_REVISION = 'a9cf1d13d045d65813b4bc80bde8fdd62db4c35c';
 
-const PHONON_REPO = 'tiyuvta/Phonon-2-ONNX';
-const PHONON_REVISION = '17ac254c838e29d59e92df13c1be3c0221f8f4ed';
+const PHONON_REPO = 'enriqueag/phonon-2.5-onnx';
+const PHONON_REVISION = '5a76001bd8dfc058632290d2ef594236b7ca2bd4';
 
 const EUROPEAN_25 = [
   'Bulgarian',
@@ -439,23 +445,10 @@ const ULTRA_WEBGPU_FILES = (): ModelFileSeed[] => [
 ];
 
 const PHONON_FILES = (): ModelFileSeed[] => [
-  {
-    role: 'preprocessorGraph',
-    name: 'preprocessor-model.onnx',
-    size: 1_193_996,
-  },
-  {
-    role: 'encoderGraph',
-    name: 'encoder-model.int8.onnx',
-    size: 614_486_780,
-  },
-  {
-    role: 'decoderGraph',
-    name: 'decoder_joint-model.int8.onnx',
-    size: 72_518_934,
-  },
-  { role: 'vocab', name: 'vocab.txt', size: 93_939 },
-  { role: 'config', name: 'config.json', size: 121 },
+  { role: 'encoderGraph', name: 'encoder.exact2x2.onnx', size: 362_728_506 },
+  { role: 'decoderGraph', name: 'decoder_joint.int8.onnx', size: 17_644_009 },
+  { role: 'vocab', name: 'vocab.txt', size: 93_928 },
+  { role: 'config', name: 'config.json', size: 1_265 },
 ];
 
 const RUMBLE_FILES = (): ModelFileSeed[] => [
@@ -482,6 +475,19 @@ const QWEN_FILES = (): ModelFileSeed[] => [
     name: 'tokenizer/tokenizer_config.json',
     size: 12_487,
   },
+];
+
+const QWEN_WEBGPU_FILES = (): ModelFileSeed[] => [
+  { role: 'encoderGraph', name: 'onnx/audio_encoder_fp16.onnx', size: 108_938 },
+  { role: 'encoderData', name: 'onnx/audio_encoder_fp16.onnx_data', size: 634_978_752 },
+  { role: 'embedTokens', name: 'onnx/embed_tokens_q4.onnx', size: 675 },
+  { role: 'embedTokensData', name: 'onnx/embed_tokens_q4.onnx_data', size: 194_478_080 },
+  { role: 'decoderGraph', name: 'onnx/decoder_model_merged_q4.onnx', size: 189_661 },
+  { role: 'decoderData', name: 'onnx/decoder_model_merged_q4.onnx_data', size: 1_084_137_472 },
+  { role: 'tokenizerVocab', name: 'vocab.json', size: 2_776_833 },
+  { role: 'tokenizerMerges', name: 'merges.txt', size: 1_671_853 },
+  { role: 'tokenizerConfig', name: 'tokenizer_config.json', size: 12_487 },
+  { role: 'preprocessor', name: 'preprocessor_config.json', size: 356 },
 ];
 
 const GRANITE_FILES = (): ModelFileSeed[] => [
@@ -875,44 +881,32 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     ],
   },
   {
-    id: 'phonon-2',
-    name: 'Phonon-2',
-    family: 'Phonon TDT · 2.1-bit encoder · ONNX',
-    pipeline: 'fused-tdt',
+    id: 'phonon-2.5',
+    name: 'Phonon-2.5',
+    family: 'Phonon TDT · 2-bit encoder · ONNX',
+    pipeline: 'projected-tdt',
     repo: PHONON_REPO,
     revision: PHONON_REVISION,
     description:
-      'Fermion Research’s English recognizer, derived from Parakeet TDT 0.6B v3. Both ONNX variants include Phonon’s exact preprocessor. The exact encoder preserves the reference weights.',
-    languages: 'English',
-    languagesDetail: ['English'],
-    languageCount: 1,
-    wer: '5.21% average WER on 7 English sets (Fermion); int8 export 4.35% on LibriSpeech dev-clean',
-    release: '2026-09-29',
+      'Fermion Research’s compact recognizer for 25 European languages, with automatic language detection and word timestamps.',
+    languages: '25 European languages',
+    languagesDetail: EUROPEAN_25,
+    languageCount: 25,
+    timestamps: 'word',
+    wer: '5.06% average WER on 7 English sets (Fermion)',
+    release: '2026-10-22',
     license: 'CC BY 4.0',
     licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
     cleanMode: false,
-    chunkSeconds: 30,
-    bestFor: 'Best English accuracy',
-    defaultVariant: 'exact4x2',
+    chunkSeconds: 25,
+    bestFor: 'Compact multilingual transcription',
+    defaultVariant: 'exact2x2',
     variants: [
       {
-        id: 'exact4x2',
-        label: 'Highest quality · Exact encoder + FP32 decoder · 736 MB',
-        approxBytes: 735_997_967,
-        note: 'Lossless packed encoder weights with the full-precision decoder.',
-        files: () => PHONON_FILES().map((file) => {
-          if (file.role === 'encoderGraph') {
-            return { ...file, name: 'encoder-model.exact4x2.onnx', size: 662_190_977 };
-          }
-          return file;
-        }),
-      },
-      {
-        id: 'int8',
-        label: 'int8 encoder + fp32 decoder · 688 MB',
-        approxBytes: 688_293_770,
-        note:
-          'The smallest Phonon-2 ONNX package. Includes Phonon’s exact log-mel preprocessor; the encoder uses standard int8 ops and the decoder is the usual TDT joint network.',
+        id: 'exact2x2',
+        label: '2-bit encoder + INT8 decoder · 380 MB',
+        approxBytes: 380_467_708,
+        note: 'WebGPU accelerates the encoder. CPU inference is available.',
         files: PHONON_FILES,
       },
     ],
@@ -987,6 +981,38 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     ],
   },
   {
+    id: 'qwen3-asr-1.7b',
+    name: 'Qwen3-ASR 1.7B Preview',
+    family: 'Qwen3-ASR · 1.7B · WebGPU',
+    pipeline: 'qwen3-asr-webgpu',
+    repo: QWEN_WEBGPU_REPO,
+    revision: QWEN_WEBGPU_REVISION,
+    description: 'A larger Qwen3-ASR model with better results on Brazilian Portuguese and Mandarin in our browser benchmark.',
+    languages: '30 languages + 22 Chinese dialects',
+    languagesDetail: QWEN_30,
+    dialects: QWEN_DIALECTS,
+    languageOptions: QWEN_30.map((name) => name === 'Chinese (Mandarin)' ? 'Chinese' : name),
+    languageCount: QWEN_30.length,
+    wer: '4.3% WER on 22 Brazilian Portuguese clips (LocalScribe)',
+    release: '2026-01-28',
+    license: 'Apache 2.0',
+    licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0',
+    cleanMode: false,
+    chunkSeconds: 15,
+    requiresWebGPU: 'shader-f16',
+    bestFor: 'Brazilian Portuguese and Mandarin',
+    defaultVariant: 'q4',
+    variants: [
+      {
+        id: 'q4',
+        label: 'FP16 encoder + 4-bit decoder · 1.92 GB',
+        approxBytes: 1_918_355_107,
+        note: 'The encoder and decoder run on WebGPU.',
+        files: QWEN_WEBGPU_FILES,
+      },
+    ],
+  },
+  {
     id: 'omnilingual-300m',
     name: 'Omnilingual ASR 300M',
     family: 'OmniASR CTC · 300M · 1,600+ languages',
@@ -1032,6 +1058,7 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     name: 'Granite Speech 5.0 2B',
     family: 'Granite Speech · 2B · Transformers.js',
     pipeline: 'granite-speech',
+    requiresWebGPU: 'standard',
     repo: GRANITE_REPO,
     revision: GRANITE_REVISION,
     description:
@@ -1080,6 +1107,28 @@ export const RESEARCH_MODELS: ResearchModel[] = [
     license: 'CC BY 4.0 (expected)',
     tags: ['English', 'Not released'],
   },
+  {
+    id: 'moss-transcribe-diarize',
+    name: 'MOSS-Transcribe-Diarize 0.9B',
+    status: 'research',
+    reason: 'The INT4 prototype matched the current diarizer on six speaker turns and generated text on silence.',
+    url: 'https://huggingface.co/moonbox-dev/MOSS-Transcribe-Diarize-ONNX',
+    size: '745 MB INT4',
+    release: '2026-11-26',
+    license: 'Apache 2.0',
+    tags: ['Speaker labels', 'Segment timestamps'],
+  },
+  {
+    id: 'oruk-fourier-2b',
+    name: 'Oruk Fourier 2B',
+    status: 'research',
+    reason: 'The INT8 model exceeds the model picker’s 2 GB limit and scored 41.2% WER on four noisy English clips in our native CPU test.',
+    url: 'https://huggingface.co/oruk/oruk-fourier-2b',
+    size: '2.41 GB INT8',
+    release: '2026-11-25',
+    license: 'CC BY-NC 4.0',
+    tags: ['English'],
+  },
 ];
 
 export function modelBaseUrl(model: SupportedModel): string {
@@ -1090,8 +1139,13 @@ export function hfUrl(model: SupportedModel, fileName: string): string {
   return `${modelBaseUrl(model)}${fileName}`;
 }
 
+export function findModel(modelId: string | null): SupportedModel | undefined {
+  const id = modelId === 'phonon-2' ? 'phonon-2.5' : modelId;
+  return SUPPORTED_MODELS.find((entry) => entry.id === id);
+}
+
 export function getModel(modelId: ModelId): SupportedModel {
-  const model = SUPPORTED_MODELS.find((entry) => entry.id === modelId);
+  const model = findModel(modelId);
   if (!model) {
     throw new Error(`Unknown model: ${modelId}`);
   }

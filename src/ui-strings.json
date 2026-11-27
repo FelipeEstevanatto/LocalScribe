@@ -996,5 +996,16 @@
   "No speech found",
   "Inspect metadata",
   "Convert format",
-  "Quick video tools"
+  "Quick video tools",
+  "Compact multilingual transcription",
+  "25 languages · Phonon-2.5 · 380 MB",
+  "Qwen3-ASR 1.7B Preview",
+  "Brazilian Portuguese and Mandarin",
+  "2-bit encoder + INT8 decoder · 380 MB",
+  "FP16 encoder + 4-bit decoder · 1.92 GB",
+  "This model requires WebGPU with shader-f16 support.",
+  "Research",
+  "Phonon-2 (retired)",
+  "Select Phonon-2.5",
+  "Select Qwen3-ASR 1.7B Preview"
 ]

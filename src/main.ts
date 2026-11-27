@@ -17,6 +17,7 @@ import {
   STUDIO_WHISPER_MODEL_ID,
   STUDIO_WHISPER_VARIANT_ID,
   defaultSelection,
+  findModel,
   getModel,
   getVariant,
   type ModelId,
@@ -45,7 +46,7 @@ import { SAMPLE_TRANSCRIPT, wordErrorRate } from './benchmark';
 import { openWaveSource, planWaveChunks, summarizeWave, type WaveSource } from './wave-source';
 import type { WordTiming } from './transformers-asr';
 import { buildExport, EXPORT_FORMATS, realignSegments, type ExportFormat } from './exports';
-import { modelFit, prefersCompactModel, readDeviceProfile, type DeviceProfile } from './capabilities';
+import { modelFit, modelNeedsWebGpu, prefersCompactModel, readDeviceProfile, type DeviceProfile } from './capabilities';
 import { JOB_PRESETS, type JobPreset } from './presets';
 import { MicrophoneRecorder } from './recorder';
 import { polishTranscript } from './postprocess';
@@ -1121,7 +1122,7 @@ async function init(): Promise<void> {
   webgpuReady = detectWebGPU()
     .then((status) => {
       state.webgpu = status;
-      deviceProfile = readDeviceProfile(status.supported);
+      deviceProfile = readDeviceProfile(status.supported, status.shaderF16);
       renderWebGpuStatus();
       renderTtsModel();
       renderModelPicker();
@@ -2421,12 +2422,10 @@ function cancelRecording(): void {
 }
 
 /**
- * Whether the selected speech model will actually run on the CPU. Granite
- * Speech requires WebGPU and ignores the CPU preference, so labels must not
- * claim WASM for it.
+ * Whether the selected speech model will actually run on the CPU.
  */
 function modelRunsOnCpu(model = currentModel()): boolean {
-  if (model.pipeline === 'granite-speech') return false;
+  if (model.requiresWebGPU) return false;
   if (state.forceCpu || !state.webgpu.supported || WASM_ONLY_PIPELINES.has(model.pipeline)) return true;
   // A per-model default until the user picks a device in this session.
   return !deviceChosen && model.preferCpu === true;
@@ -2444,7 +2443,7 @@ function renderQueueSettings(): void {
   const variantLabel = rawLabel.startsWith(model.name)
     ? rawLabel.slice(model.name.length).replace(/^[\s·-]+/, '')
     : rawLabel;
-  const parts = [variantLabel || variant.id, modelRunsOnCpu(model) ? 'WASM' : model.pipeline === 'granite-speech' ? 'WebGPU (required)' : 'WebGPU'];
+  const parts = [variantLabel || variant.id, modelRunsOnCpu(model) ? 'WASM' : model.requiresWebGPU ? 'WebGPU (required)' : 'WebGPU'];
   if (model.languageOptions?.length) {
     const language = els.languageSelect.selectedOptions[0]?.textContent?.trim();
     parts.push(language || 'Auto-detect');
@@ -2603,10 +2602,10 @@ function applyUrlState(): void {
     els.cleanMode.checked = Boolean(preset.clean && model.cleanMode);
   }
 
-  const model = params.get('model');
-  if (model && SUPPORTED_MODELS.some((entry) => entry.id === model)) {
-    state.modelId = model as ModelId;
-    state.variantId = getModel(state.modelId).defaultVariant;
+  const model = findModel(params.get('model'));
+  if (model) {
+    state.modelId = model.id;
+    state.variantId = model.defaultVariant;
   }
 
   const variant = params.get('variant');
@@ -2915,10 +2914,11 @@ async function runBenchmark(): Promise<void> {
   const jobs: Array<{ label: string; options: ConstructorParameters<typeof AsrClient>[0] }> = [];
   const options = { modelId: model.id, variantId: variant.id, clean: currentClean(), language: state.language };
   const selected = `${model.name} · ${variant.id}`;
-  if (state.webgpu.supported && !['moonshine', 'whisper', 'omnilingual', 'cactus'].includes(model.pipeline)) {
+  if (state.webgpu.supported && !modelNeedsWebGpu(model, state.webgpu) &&
+      !['moonshine', 'whisper', 'omnilingual', 'cactus'].includes(model.pipeline)) {
     jobs.push({ label: `${selected} · WebGPU requested`, options: { ...options, useWebGPU: true } });
   }
-  if (model.pipeline !== 'granite-speech') {
+  if (!model.requiresWebGPU) {
     jobs.push({ label: `${selected} · CPU`, options: { ...options, useWebGPU: false } });
   }
   if (els.benchmarkReference.checked) {
@@ -3033,9 +3033,10 @@ function renderSession(): void {
     setBadge(els.sessionCache, 'Checking…', 'muted');
   }
 
-  const webgpuAvailable = state.webgpu.supported;
-  const webgpuOnly = currentModel().pipeline === 'granite-speech';
-  const wasmOnly = WASM_ONLY_PIPELINES.has(currentModel().pipeline);
+  const needsWebGpu = modelNeedsWebGpu(model, state.webgpu);
+  const webgpuAvailable = state.webgpu.supported && !needsWebGpu;
+  const webgpuOnly = Boolean(model.requiresWebGPU);
+  const wasmOnly = WASM_ONLY_PIPELINES.has(model.pipeline);
   const onCpu = modelRunsOnCpu();
   // Moonshine and Whisper always run on WASM; do not show WebGPU as active.
   els.deviceWebgpu.disabled = state.busy !== 'idle' || !webgpuAvailable || wasmOnly;
@@ -3055,6 +3056,8 @@ function renderSession(): void {
     renderSessionStatus('Decoding audio…', 'busy');
   } else if (loaded) {
     renderSessionStatus('Ready', 'ready');
+  } else if (needsWebGpu) {
+    renderSessionStatus('WebGPU required', 'warn');
   } else if (status?.cached) {
     renderSessionStatus('Cached · ready to load', 'idle');
   } else if (status && status.filesCached > 0) {
@@ -3069,7 +3072,7 @@ function renderSession(): void {
   els.sessionVariantSelect.disabled = state.busy !== 'idle';
   els.sessionPreload.disabled =
     state.busy !== 'idle' ||
-    (model.pipeline === 'granite-speech' && !state.webgpu.supported);
+    needsWebGpu;
   setButtonLabel(
     els.sessionPreload,
     state.busy === 'loading'
@@ -3083,8 +3086,8 @@ function renderSession(): void {
 
   const cached = Boolean(status?.cached);
   els.downloadHint.textContent =
-    model.pipeline === 'granite-speech' && !state.webgpu.supported
-      ? 'This model requires WebGPU and will not run in this browser.'
+    needsWebGpu
+      ? webGpuRequirement(model)
       : cached
         ? 'Model is cached. This run loads from disk.'
         : `First run downloads about ${formatBytes(variant.approxBytes)} from Hugging Face.`;
@@ -4647,11 +4650,10 @@ async function ensureEngine(signal: AbortSignal): Promise<AsrClient> {
     await dropEngine();
   }
 
-  if (model.pipeline === 'granite-speech' && !gpu.supported) {
-    throw new AppError('Granite Speech requires WebGPU.', {
+  if (modelNeedsWebGpu(model, gpu)) {
+    throw new AppError(webGpuRequirement(model), {
       code: 'WEBGPU_REQUIRED',
-      hint:
-        'This browser has no WebGPU adapter, and Granite’s 4-bit embedding has no CPU kernel. Choose Rumble-2-Flash, Qwen3-ASR, Fluid Speech, or Parakeet Redux, or open the app in a WebGPU-capable Chrome or Edge.',
+      hint: 'Choose Qwen3-ASR 0.6B or another CPU-capable model on this device.',
     });
   }
 
@@ -5398,6 +5400,12 @@ function currentVariant(): ModelVariant {
   return getVariant(currentModel(), state.variantId);
 }
 
+function webGpuRequirement(model: SupportedModel): string {
+  return model.requiresWebGPU === 'shader-f16'
+    ? 'This model requires WebGPU with shader-f16 support.'
+    : 'This model requires WebGPU and will not run in this browser.';
+}
+
 function isVariantSupported(variant: ModelVariant): boolean {
   return variant.approxBytes < 2_000_000_000;
 }
@@ -5590,8 +5598,7 @@ function renderModelCards(): void {
     const loaded =
       state.engine?.modelId === model.id &&
       state.engine.variantId === variant.id;
-    const blocked =
-      model.pipeline === 'granite-speech' && !state.webgpu.supported;
+    const blocked = modelNeedsWebGpu(model, state.webgpu);
     const languageLabel = languageCountLabel(model);
     const fit = modelFit(model, variant, deviceProfile);
 
@@ -5606,7 +5613,7 @@ function renderModelCards(): void {
     } else if (blocked) {
       badge = 'WebGPU needed';
       tone = 'badge-warn';
-      detail = 'Granite requires a WebGPU adapter in this browser.';
+      detail = webGpuRequirement(model);
     } else if (status?.available === false) {
       badge = 'Cache unavailable';
       tone = 'badge-warn';
@@ -5677,18 +5684,19 @@ function renderSelectedModelStatus(status?: CacheStatus): void {
   const loaded =
     state.engine?.modelId === model.id &&
     state.engine.variantId === variant.id;
-  const blocked =
-    model.pipeline === 'granite-speech' && !state.webgpu.supported;
+  const blocked = modelNeedsWebGpu(model, state.webgpu);
 
   if (loaded) {
     setBadge(badge, 'Ready now', 'good');
-    detail.textContent = `Loaded and validated · ${state.engine?.backend === 'webgpu' ? 'WebGPU + WASM' : 'WASM CPU'}`;
+    const gpuLabel = model.pipeline === 'qwen3-asr-webgpu' ? 'WebGPU' : 'WebGPU + WASM';
+    const backend = state.engine?.backend === 'webgpu' ? gpuLabel : 'WASM CPU';
+    detail.textContent = `Loaded and validated · ${backend}`;
     return;
   }
 
   if (blocked) {
     setBadge(badge, 'WebGPU required', 'warn');
-    detail.textContent = 'This browser has no WebGPU adapter, so this model cannot run here.';
+    detail.textContent = webGpuRequirement(model);
     return;
   }
 
@@ -5767,7 +5775,7 @@ function renderResearchModels(): void {
         ? 'Not speech-to-text'
         : model.status === 'upcoming'
           ? 'Coming soon'
-          : 'Needs different runtime';
+          : 'Research';
     const tone = model.status === 'wrong-task' ? 'badge-warn' : 'badge-muted';
 
     return `
@@ -5806,7 +5814,7 @@ function loadPreferences(): void {
     const legacyPreset = localStorage.getItem(LEGACY_PRESET_KEY);
     const compact = prefersCompactModel(readDeviceProfile('gpu' in navigator));
 
-    const model = SUPPORTED_MODELS.find((entry) => entry.id === savedModel);
+    const model = findModel(savedModel);
 
     const preferredVariant = (entry: SupportedModel): string => {
       if (savedVariant && entry.variants.some((variant) => variant.id === savedVariant)) return savedVariant;
@@ -5870,10 +5878,8 @@ function updatePresetNote(): void {
       : ' The model will detect the language automatically.';
   }
 
-  if (model.pipeline === 'granite-speech') {
-    note += state.webgpu.supported
-      ? ' WebGPU is available, so this model can run here.'
-      : ' This browser has no WebGPU adapter, and Granite cannot run on CPU; pick Rumble-2-Flash or Qwen3-ASR instead.';
+  if (modelNeedsWebGpu(model, state.webgpu)) {
+    note += ` ${webGpuRequirement(model)}`;
   }
 
   if (model.cleanMode && currentClean()) {
@@ -5889,7 +5895,7 @@ function updatePresetNote(): void {
 
   if (
     variant.approxBytes > 1_000_000_000 &&
-    model.pipeline !== 'granite-speech'
+    !model.requiresWebGPU
   ) {
     if (!state.webgpu.supported) {
       note +=
@@ -5920,10 +5926,9 @@ async function refreshCacheStatus(): Promise<void> {
     renderModelCards();
     updatePresetNote();
 
-    const graniteBlocked =
-      model.pipeline === 'granite-speech' && !state.webgpu.supported;
+    const blocked = modelNeedsWebGpu(model, state.webgpu);
 
-    if (graniteBlocked) {
+    if (blocked) {
       setTone(els.cacheStatus, 'WebGPU required', 'warn');
       setButtonLabel(els.preloadBtn, 'WebGPU required');
     } else if (!status.available) {
@@ -5940,7 +5945,7 @@ async function refreshCacheStatus(): Promise<void> {
       setButtonLabel(els.preloadBtn, 'Download & prepare model');
     }
 
-    els.preloadBtn.disabled = state.busy !== 'idle' || graniteBlocked;
+    els.preloadBtn.disabled = state.busy !== 'idle' || blocked;
     els.clearCacheBtn.disabled = state.busy !== 'idle' || !status.available;
     void refreshDownloadedModels();
   } catch {
@@ -6151,9 +6156,11 @@ function setBackend(backend: Backend | null): void {
   }
 
   if (backend === 'webgpu') {
-    setBadge(els.backendBadge, 'WebGPU + WASM', 'good');
-    els.backendBadge.title =
-      'The encoder initialized with WebGPU. The small TDT decoder runs on WASM to avoid per-token GPU round trips.';
+    const qwenPreview = currentModel().pipeline === 'qwen3-asr-webgpu';
+    setBadge(els.backendBadge, qwenPreview ? 'WebGPU' : 'WebGPU + WASM', 'good');
+    els.backendBadge.title = qwenPreview
+      ? 'The encoder and decoder run on WebGPU.'
+      : 'The encoder initialized with WebGPU. The small TDT decoder runs on WASM to avoid per-token GPU round trips.';
   } else {
     setBadge(els.backendBadge, 'WASM (CPU)', 'warn');
     els.backendBadge.title = 'The encoder and decoder are running on the CPU via WebAssembly.';
@@ -6222,10 +6229,10 @@ function setBusy(next: BusyState): void {
   els.cleanMode.disabled = !idle || !currentModel().cleanMode;
   els.preloadBtn.disabled =
     !idle ||
-    (currentModel().pipeline === 'granite-speech' && !state.webgpu.supported);
+    modelNeedsWebGpu(currentModel(), state.webgpu);
   els.sessionPreload.disabled =
     !idle ||
-    (currentModel().pipeline === 'granite-speech' && !state.webgpu.supported);
+    modelNeedsWebGpu(currentModel(), state.webgpu);
   els.sessionModelSelect.disabled = !idle;
   els.sessionCancel.classList.toggle('hidden', next !== 'loading');
   if (next !== 'loading') {
