@@ -27,6 +27,16 @@ describe('YUV plane scaling', () => {
     expect(half[127]).toBeGreaterThanOrEqual(254);
   });
 
+  test('a 3x downscale averages fine detail instead of picking samples', () => {
+    // One bright column in three: plain 2-tap bilinear lands on or between
+    // samples and gives stripes; the widened filter gives about the mean.
+    const width = 300;
+    const stripes = Uint8Array.from({ length: width * 6 }, (_, i) => (i % width) % 3 === 1 ? 255 : 0);
+    const small = new Uint8Array(100 * 2);
+    scalePlane(stripes, 0, width, 1, width, 6, small, 0, 100, 2);
+    for (const value of small.subarray(1, 99)) expect(Math.abs(value - 85)).toBeLessThanOrEqual(15);
+  });
+
   test('NV12 and I420 planes give the same I420 frame', () => {
     const width = 8;
     const height = 4;

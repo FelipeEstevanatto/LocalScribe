@@ -10,9 +10,73 @@
  */
 import type { VideoSample } from 'mediabunny';
 
+/** Fixed-point weight scale for the scaling taps. */
+const WEIGHT_BITS = 14;
+
+interface Taps {
+  /** First source index for each output index. */
+  start: Int32Array;
+  /** Number of taps for each output index. */
+  count: Int32Array;
+  /** `size` weights per output index, summing to 1 << WEIGHT_BITS. */
+  weights: Int32Array;
+  size: number;
+}
+
 /**
- * Bilinear resample of one 8-bit plane. `step` is 1 for a planar plane and 2
- * for one component of an interleaved NV12 chroma plane (with `offset` already
+ * Taps from `source` samples to `target` samples. On a downscale each output
+ * sample averages the source span it covers (an area filter), so every source
+ * sample counts; plain 2-tap bilinear skips samples past 2x and aliases. On an
+ * upscale it is bilinear.
+ */
+function filterTaps(source: number, target: number): Taps {
+  const scale = source / target;
+  const size = Math.ceil(scale) + 2;
+  const start = new Int32Array(target);
+  const count = new Int32Array(target);
+  const weights = new Int32Array(target * size);
+  const raw = new Float64Array(size);
+  for (let i = 0; i < target; i += 1) {
+    raw.fill(0);
+    let low: number;
+    let high: number;
+    if (scale > 1) {
+      const from = i * scale;
+      const to = Math.min(source, (i + 1) * scale);
+      low = Math.floor(from);
+      high = Math.min(source, Math.ceil(to)) - 1;
+      for (let j = low; j <= high; j += 1) raw[j - low] = Math.min(to, j + 1) - Math.max(from, j);
+    } else {
+      const center = Math.min(source - 1, Math.max(0, (i + 0.5) * scale - 0.5));
+      low = Math.floor(center);
+      high = Math.min(source - 1, low + 1);
+      raw[0] = 1 - (center - low);
+      if (high > low) raw[1] = center - low;
+    }
+    const n = high - low + 1;
+    let total = 0;
+    for (let k = 0; k < n; k += 1) total += raw[k];
+    const offset = i * size;
+    let sum = 0;
+    let largest = 0;
+    for (let k = 0; k < n; k += 1) {
+      const weight = Math.round((raw[k] / total) * (1 << WEIGHT_BITS));
+      weights[offset + k] = weight;
+      sum += weight;
+      if (weight > weights[offset + largest]) largest = k;
+    }
+    // Rounding leftovers go to the largest tap so a flat plane stays flat.
+    weights[offset + largest] += (1 << WEIGHT_BITS) - sum;
+    start[i] = low;
+    count[i] = n;
+  }
+  return { start, count, weights, size };
+}
+
+/**
+ * Resample one 8-bit plane with a separable filter (area on a downscale,
+ * bilinear on an upscale). `step` is 1 for a planar plane and 2 for
+ * one component of an interleaved NV12 chroma plane (with `offset` already
  * pointing at that component).
  */
 export function scalePlane(
@@ -36,33 +100,78 @@ export function scalePlane(
     }
     return;
   }
-  const scaleX = sourceWidth / targetWidth;
-  const scaleY = sourceHeight / targetHeight;
-  const maxX = sourceWidth - 1;
-  const maxY = sourceHeight - 1;
-  // Horizontal taps are the same for every row.
-  const x0s = new Int32Array(targetWidth);
-  const x1s = new Int32Array(targetWidth);
-  const fxs = new Float32Array(targetWidth);
+  const across = filterTaps(sourceWidth, targetWidth);
+  const down = filterTaps(sourceHeight, targetHeight);
+  // Vertical pass first, one output row at a time, so the horizontal pass only
+  // runs on output rows. The row is kept as value * 256.
+  const sums = new Int32Array(sourceWidth);
+  const row = new Uint16Array(sourceWidth);
+  const shift = WEIGHT_BITS - 8;
+  const half = 1 << (shift - 1);
+  const finalShift = WEIGHT_BITS + 8;
+  const round = 1 << (finalShift - 1);
+  // Horizontal taps as flat arrays of `taps` entries per output sample
+  // (source index and weight, padded with zero weights).
+  let taps = 2;
+  for (let x = 0; x < targetWidth; x += 1) taps = Math.max(taps, across.count[x]);
+  const at = new Int32Array(targetWidth * taps);
+  const wt = new Int32Array(targetWidth * taps);
   for (let x = 0; x < targetWidth; x += 1) {
-    const sx = Math.min(maxX, Math.max(0, (x + 0.5) * scaleX - 0.5));
-    const x0 = Math.floor(sx);
-    x0s[x] = x0 * step;
-    x1s[x] = Math.min(maxX, x0 + 1) * step;
-    fxs[x] = sx - x0;
+    for (let k = 0; k < taps; k += 1) {
+      const inside = k < across.count[x];
+      at[x * taps + k] = inside ? across.start[x] + k : across.start[x];
+      wt[x * taps + k] = inside ? across.weights[x * across.size + k] : 0;
+    }
   }
   for (let y = 0; y < targetHeight; y += 1) {
-    const sy = Math.min(maxY, Math.max(0, (y + 0.5) * scaleY - 0.5));
-    const y0 = Math.floor(sy);
-    const fy = sy - y0;
-    const row0 = offset + y0 * stride;
-    const row1 = offset + Math.min(maxY, y0 + 1) * stride;
+    const n = down.count[y];
+    const w = y * down.size;
+    const line = offset + down.start[y] * stride;
+    if (step === 1 && n === 2) {
+      // The common cases written out: one pass, no running sums.
+      const w0 = down.weights[w];
+      const w1 = down.weights[w + 1];
+      const l1 = line + stride;
+      for (let x = 0; x < sourceWidth; x += 1) row[x] = (source[line + x] * w0 + source[l1 + x] * w1 + half) >> shift;
+    } else if (step === 1 && n === 3) {
+      const w0 = down.weights[w];
+      const w1 = down.weights[w + 1];
+      const w2 = down.weights[w + 2];
+      const l1 = line + stride;
+      const l2 = l1 + stride;
+      for (let x = 0; x < sourceWidth; x += 1) {
+        row[x] = (source[line + x] * w0 + source[l1 + x] * w1 + source[l2 + x] * w2 + half) >> shift;
+      }
+    } else {
+      sums.fill(0);
+      for (let k = 0; k < n; k += 1) {
+        const weight = down.weights[w + k];
+        const from = line + k * stride;
+        if (step === 1) for (let x = 0; x < sourceWidth; x += 1) sums[x] += source[from + x] * weight;
+        else for (let x = 0; x < sourceWidth; x += 1) sums[x] += source[from + x * step] * weight;
+      }
+      for (let x = 0; x < sourceWidth; x += 1) row[x] = (sums[x] + half) >> shift;
+    }
     const out = targetOffset + y * targetWidth;
-    for (let x = 0; x < targetWidth; x += 1) {
-      const fx = fxs[x];
-      const top = source[row0 + x0s[x]] + (source[row0 + x1s[x]] - source[row0 + x0s[x]]) * fx;
-      const bottom = source[row1 + x0s[x]] + (source[row1 + x1s[x]] - source[row1 + x0s[x]]) * fx;
-      target[out + x] = Math.round(top + (bottom - top) * fy);
+    if (taps === 2) {
+      for (let x = 0, t = 0; x < targetWidth; x += 1, t += 2) {
+        target[out + x] = (row[at[t]] * wt[t] + row[at[t + 1]] * wt[t + 1] + round) >>> finalShift;
+      }
+    } else if (taps === 3) {
+      for (let x = 0, t = 0; x < targetWidth; x += 1, t += 3) {
+        target[out + x] = (row[at[t]] * wt[t] + row[at[t + 1]] * wt[t + 1] + row[at[t + 2]] * wt[t + 2] + round) >>> finalShift;
+      }
+    } else if (taps === 4) {
+      for (let x = 0, t = 0; x < targetWidth; x += 1, t += 4) {
+        target[out + x] = (row[at[t]] * wt[t] + row[at[t + 1]] * wt[t + 1] + row[at[t + 2]] * wt[t + 2]
+          + row[at[t + 3]] * wt[t + 3] + round) >>> finalShift;
+      }
+    } else {
+      for (let x = 0, t = 0; x < targetWidth; x += 1, t += taps) {
+        let sum = round;
+        for (let k = 0; k < taps; k += 1) sum += row[at[t + k]] * wt[t + k];
+        target[out + x] = sum >>> finalShift;
+      }
     }
   }
 }
@@ -133,7 +242,7 @@ export interface PendingI420 {
 
 /**
  * Turns decoded samples into I420 at a fixed output size, scaling in a pool of
- * workers. Bilinear scaling in JavaScript took about 8 ms per 1080p frame on
+ * workers. Scaling in JavaScript takes about 8 ms per 1080p frame (17 ms from 4K) on
  * the page thread, which kept the decoder and encoder waiting.
  */
 export interface YuvScaler {
