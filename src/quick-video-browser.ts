@@ -26,7 +26,7 @@ import {
   VideoSampleSource,
   type InputVideoTrack,
 } from 'mediabunny';
-import { i420Size, sampleToI420 } from './yuv-frames';
+import { createYuvScaler, i420Size, type PendingI420 } from './yuv-frames';
 import { audioInputName, type AudioFfmpeg, type MediaProbe } from './audio-ffmpeg';
 import { fitVideo, seconds, tempoFilters, type QuickVideoRun, type VideoOptions } from './quick-video';
 
@@ -212,13 +212,34 @@ function reverseTimes(job: ReverseJob, first: number, last: number): number[] {
 }
 
 /**
+ * Decoder preference for reading raw frames. A hardware decoder hands out GPU
+ * frames, and copying those to memory took 6 ms a 1080p frame and 33 ms a 4K
+ * frame; a software decoder's frames are already in memory. Software decoding
+ * is used when the browser has it for the codec (Chrome has none for HEVC).
+ */
+async function rawFrameDecoding(track: InputVideoTrack): Promise<HardwareAcceleration> {
+  try {
+    const config = await track.getDecoderConfig();
+    if (!config) return 'no-preference';
+    const support = await VideoDecoder.isConfigSupported({ ...config, hardwareAcceleration: 'prefer-software' });
+    return support.supported ? 'prefer-software' : 'no-preference';
+  } catch {
+    return 'no-preference';
+  }
+}
+
+/**
  * Reverse from raw I420 frames: decoded planes are copied and scaled as they
  * are, and the encoder gets the source file's colour description. Returns null
  * when the decoder hands out a format this path does not read.
+ *
+ * Scaling runs in workers, and each block is encoded while the next one is
+ * decoded, so two blocks are held at a time.
  */
 async function reverseFramesYuv(job: ReverseJob): Promise<Blob | null> {
   const { width, height, fps, total, run } = job;
-  const sink = new VideoSampleSink(job.track);
+  const sink = new VideoSampleSink(job.track, { hardwareAcceleration: await rawFrameDecoding(job.track) });
+  const scaler = createYuvScaler(width, height);
   const target = new BufferTarget();
   const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
   const source = new VideoSampleSource({
@@ -228,38 +249,16 @@ async function reverseFramesYuv(job: ReverseJob): Promise<Blob | null> {
     hardwareAcceleration: 'prefer-hardware',
   });
   output.addVideoTrack(source, { frameRate: fps });
-  const block = Math.max(4, Math.min(120, Math.floor(256_000_000 / i420Size(width, height))));
+  const block = Math.max(4, Math.min(120, Math.floor(128_000_000 / i420Size(width, height))));
   const colorSpace = job.colorSpace;
   let started = false;
   let written = 0;
-  for (let last = total; last > 0;) {
-    run.signal?.throwIfAborted();
-    const first = Math.max(0, last - block);
-    const frames: (Uint8Array | null)[] = [];
-    for await (const sample of sink.samplesAtTimestamps(reverseTimes(job, first, last))) {
-      if (!sample) {
-        frames.push(null);
-        continue;
-      }
-      try {
-        const data = await sampleToI420(sample, width, height);
-        if (!data) {
-          if (started) throw new Error(`Unsupported decoded frame format ${sample.format}.`);
-          await output.cancel().catch(() => undefined);
-          return null;
-        }
-        frames.push(data);
-      } finally {
-        sample.close();
-      }
-    }
-    if (!started) {
-      await output.start();
-      started = true;
-    }
+  const encode = async (frames: (PendingI420 | null)[]): Promise<void> => {
     for (let index = frames.length - 1; index >= 0; index -= 1) {
-      const data = frames[index] ?? frames.find(Boolean);
-      if (!data) throw new Error('The video could not be decoded.');
+      run.signal?.throwIfAborted();
+      const pending = frames[index] ?? frames.find(Boolean);
+      if (!pending) throw new Error('The video could not be decoded.');
+      const data = await pending.result;
       const frame = new VideoSample(data, {
         format: 'I420',
         codedWidth: width,
@@ -276,7 +275,43 @@ async function reverseFramesYuv(job: ReverseJob): Promise<Blob | null> {
       written += 1;
     }
     run.onProgress?.({ ratio: job.share * (written / total), time: written / fps });
-    last = first;
+  };
+  let encoding: Promise<void> = Promise.resolve();
+  try {
+    for (let last = total; last > 0;) {
+      run.signal?.throwIfAborted();
+      const first = Math.max(0, last - block);
+      const frames: (PendingI420 | null)[] = [];
+      for await (const sample of sink.samplesAtTimestamps(reverseTimes(job, first, last))) {
+        if (!sample) {
+          frames.push(null);
+          continue;
+        }
+        try {
+          const pending = await scaler.add(sample);
+          if (!pending) {
+            if (started) throw new Error(`Unsupported decoded frame format ${sample.format}.`);
+            await output.cancel().catch(() => undefined);
+            return null;
+          }
+          frames.push(pending);
+        } finally {
+          sample.close();
+        }
+      }
+      if (!started) {
+        await output.start();
+        started = true;
+      }
+      await encoding;
+      encoding = encode(frames);
+      // Keep a failed block from going unnoticed while the next one decodes.
+      encoding.catch(() => undefined);
+      last = first;
+    }
+    await encoding;
+  } finally {
+    scaler.close();
   }
   await output.finalize();
   return target.buffer ? new Blob([target.buffer], { type: 'video/mp4' }) : null;
@@ -369,8 +404,8 @@ export async function reverseInBrowser(
     // VLC) but BT.601 by FFmpeg-based tools. Drawing it through a canvas would
     // bake the browser's choice into the output; copying the YUV planes keeps
     // the source's values and leaves the output untagged too, so every player
-    // shows it as it shows the source. Tagged files are unambiguous and take
-    // the faster canvas path (the YUV copy is about 3x slower).
+    // shows it as it shows the source. Tagged files are unambiguous and keep
+    // the canvas path.
     if (untagged && (await track.getRotation()) === 0) {
       video = await reverseFramesYuv(job);
       keepUntagged = Boolean(video);

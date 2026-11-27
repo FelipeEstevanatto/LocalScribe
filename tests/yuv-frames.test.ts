@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { i420Size, scalePlane } from '../src/yuv-frames';
+import { i420Size, planesToI420, scalePlane } from '../src/yuv-frames';
 
 describe('YUV plane scaling', () => {
   test('same size copies the visible rows (planar and interleaved)', () => {
@@ -25,6 +25,22 @@ describe('YUV plane scaling', () => {
     for (let x = 1; x < 128; x += 1) expect(half[x]).toBeGreaterThan(half[x - 1]);
     expect(half[0]).toBeLessThanOrEqual(1);
     expect(half[127]).toBeGreaterThanOrEqual(254);
+  });
+
+  test('NV12 and I420 planes give the same I420 frame', () => {
+    const width = 8;
+    const height = 4;
+    const luma = Uint8Array.from({ length: width * height }, (_, i) => i * 3);
+    const u = Uint8Array.from({ length: 8 }, (_, i) => 100 + i);
+    const v = Uint8Array.from({ length: 8 }, (_, i) => 200 + i);
+    const i420 = new Uint8Array([...luma, ...u, ...v]);
+    const nv12 = new Uint8Array([...luma, ...[...u].flatMap((value, i) => [value, v[i]])]);
+    const fromI420 = planesToI420({ buffer: i420, format: 'I420', width, height,
+      layout: [{ offset: 0, stride: 8 }, { offset: 32, stride: 4 }, { offset: 40, stride: 4 }] }, 4, 2);
+    const fromNv12 = planesToI420({ buffer: nv12, format: 'NV12', width, height,
+      layout: [{ offset: 0, stride: 8 }, { offset: 32, stride: 8 }] }, 4, 2);
+    expect([...fromNv12]).toEqual([...fromI420]);
+    expect(fromI420.length).toBe(i420Size(4, 2));
   });
 
   test('I420 size', () => {
