@@ -8,6 +8,8 @@
 
 A privacy-first media studio that runs in the browser. Transcribe speech, edit audio, cut video, clone a voice, and process images on your own device. There is no backend, no account, and no analytics.
 
+**[Open LocalScribe in your browser](https://felipeestevanatto.github.io/LocalScribe/)** · Built with TypeScript and Bun
+
 The app shell and runtimes ship with the site. Model weights download once into browser cache, after which the tools work offline.
 
 ## What is inside
